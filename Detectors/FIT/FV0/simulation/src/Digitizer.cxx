@@ -142,6 +142,27 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       Double_t const nPhotons = hitEdep * DP::N_PHOTONS_PER_MEV;
       Int_t const nPhE = SimulateLightYield(detId, nPhotons);
       Float_t const t = hit.GetTime() * 1e9 + FV0DigParam::Instance().pmtTransitTime;
+      Float_t timeHit = t;
+      timeHit -= 320 / o2::constants::physics::LightSpeedCm2NS;
+      timeHit += mIntRecord.timeNS;
+      o2::InteractionRecord irHit(timeHit);
+
+      std::array<o2::InteractionRecord, NBC2Cache> cachedIR;
+      int nCachedIR = 0;
+      for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
+        double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
+        cachedIR[nCachedIR].setFromNS(tNS);
+        if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
+          continue; // don't go to negative BC/orbit (it will wrap)
+        }
+        setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
+    }
+
+      Bool_t added[nCachedIR];
+      for (int ir = 0; ir < nCachedIR; ir++){
+        added[ir] = kFALSE;
+      }
+
       Float_t const charge = TMath::Qe() * FV0DigParam::Instance().pmtGain * mBinSize / mPmtTimeIntegral;
 
       auto& analogSignal = mPmtChargeVsTime[detId];
@@ -149,11 +170,15 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         Float_t const tPhE = t + mRndSignalShape.getNextValue();
         Int_t const firstBin = roundVc(
           TMath::Max((Int_t)0, (Int_t)((tPhE - FV0DigParam::Instance().pmtTransitTime) / mBinSize)));
-        Int_t const lastBin = TMath::Min((Int_t)mNBins - 1,
-                                         (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
+       // Int_t const lastBin = TMath::Min((Int_t)mNBins - 1,
+       // (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
+
+        Int_t const lastBin = TMath::Min((Int_t)(NBC2Cache * mNBins - 1), (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
         Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
         Float_t* p = analogSignal.data() + firstBin;
         long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
+        //LOG(INFO) << "firstBin = "<<firstBin<<" lastbin "<<lastBin;
+
         float const offset = tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime - Float_t(iStart) * mBinSize;
         long const iOffset = std::lround(offset / mBinSize * Float_t(DP::NUM_PMT_RESPONSE_TABLES - 1));
         if (iStart < 0) { // this should not happen
@@ -165,24 +190,37 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         Vc::float_v pmtVc;
         Float_t const* q = mPmtResponseTables[DP::NUM_PMT_RESPONSE_TABLES / 2 + iOffset].data() + iStart;
         Float_t const* qEnd = &mPmtResponseTables[DP::NUM_PMT_RESPONSE_TABLES / 2 + iOffset].back();
-        for (Int_t i = firstBin, iEnd = roundVc(lastBin); q < qEnd && i < iEnd; i += Vc::float_v::Size) {
-          pmtVc.load(q);
-          q += Vc::float_v::Size;
-          Vc::prefetchForOneRead(q);
-          workVc.load(p);
-          workVc += mRndGainVar.getNextValueVc() * charge * pmtVc;
-          workVc.store(p);
-          p += Vc::float_v::Size;
-          Vc::prefetchForOneRead(p);
-        }
+
+       for (int ir = firstBin / mNBins; ir <= lastBin / mNBins; ir++) {
+         int localFirst = (ir == firstBin / mNBins) ? firstBin : 0;
+         int localLast = (ir < lastBin / mNBins) ? mNBins : (lastBin - ir * mNBins);
+         float* p = analogSignal.data() + localFirst;
+
+         for (Int_t i = localFirst, iEnd = roundVc(localLast); q < qEnd && i < iEnd; i += Vc::float_v::Size) {
+           pmtVc.load(q);
+           q += Vc::float_v::Size;
+           Vc::prefetchForOneRead(q);
+           workVc.load(p);
+           workVc += mRndGainVar.getNextValueVc() * charge * pmtVc;
+           workVc.store(p);
+           p += Vc::float_v::Size;
+           Vc::prefetchForOneRead(p);
+         }
+         added[ir] = kTRUE;
+       }
       } //photo electron loop
 
       // Charged particles in MCLabel
       Int_t const parentId = hit.GetTrackID();
-      if (parentId != parentIdPrev) {
-        mMCLabels.emplace_back(parentId, mEventId, mSrcId, detId);
-        parentIdPrev = parentId;
+      for (int ir = 0; ir < nCachedIR; ir++){
+        if (parentId != parentIdPrev && added[ir]) {
+          mMCLabels.emplace_back(parentId, mEventId, mSrcId, detId);
+          parentIdPrev = parentId;
+          auto bcCache = getBCCache(cachedIR[ir]);
+          (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId);
+        } 
       }
+
     }
   } //hit loop
 }
@@ -194,25 +232,41 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   // Sum charge of all time bins to get total charge collected for a given channel
   size_t const first = digitsCh.size();
   size_t nStored = 0;
-  for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
-    Float_t totalCharge = 0.0f;
-    auto const& analogSignal = mPmtChargeVsTime[ipmt];
-    for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++iTimeBin) {
-      Float_t const timeBinCharge = mPmtChargeVsTime[ipmt][iTimeBin];
-      totalCharge += timeBinCharge;
-    }
-    totalCharge *= DP::INV_CHARGE_PER_ADC;
-    digitsCh.emplace_back(ipmt, SimulateTimeCfd(ipmt), std::lround(totalCharge));
-    ++nStored;
+  int  nCached = mCache.size();
+  if (nCached < 1) {
+    return;
+  }
+  if (mIntRecord.differenceInBC(mCache.back()) > -BCCacheMin) {
+    //LOG(DEBUG) << "Generating new pedestal BL fluct. for BC range " << mCache.front() << " : " << mCache.back();
+  } else {
+    return;
   }
 
-  // Send MClabels and digitsBC to storage
-  size_t const nBC = digitsBC.size();
-  digitsBC.emplace_back(first, nStored, mIntRecord);
-  for (auto const& lbl : mMCLabels) {
-    labels.addElement(nBC, lbl);
+  for (Int_t ibc = 0; ibc < nCached; ibc ++){
+    auto& bc = mCache[ibc];
+    for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
+      Float_t totalCharge = 0.0f;
+      auto const& analogSignal = mPmtChargeVsTime[ipmt];
+      for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++iTimeBin) {
+        Float_t const timeBinCharge = mPmtChargeVsTime[ipmt][iTimeBin];
+        totalCharge += timeBinCharge;
+      }
+      totalCharge *= DP::INV_CHARGE_PER_ADC;
+      digitsCh.emplace_back(ipmt, SimulateTimeCfd(ipmt), std::lround(totalCharge));
+      ++nStored;
+    }
+
+    // Send MClabels and digitsBC to storage
+    size_t const nBC = digitsBC.size();
+    digitsBC.emplace_back(first, nStored, bc);
+    for (auto const& lbl : bc.labels) {
+      labels.addElement(nBC, lbl);
+    }
   }
   mMCLabels.clear();
+  // clean cache for BCs which are not needed anymore
+  LOG(INFO) << "Cleaning cache";
+  mCache.erase(mCache.begin(), mCache.end());
 }
 
 // -------------------------------------------------------------------------------
@@ -302,4 +356,42 @@ float Digitizer::getSignalFraction(float distanceFromXc, bool isFirstChannel)
   } else {
     return isFirstChannel ? (1. - fraction) : fraction;
   }
-}
+//_____________________________________________________________________________
+ o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionRecord& ir)
+ {
+   if (mCache.empty() || mCache.back() < ir) {
+     mCache.emplace_back();
+     auto& cb = mCache.back();
+     cb = ir;
+     return cb;
+   }
+   if (mCache.front() > ir) {
+     mCache.emplace_front();
+     auto& cb = mCache.front();
+     cb = ir;
+     return cb;
+   }
+ 
+   for (auto cb = mCache.begin(); cb != mCache.end(); cb++) {
+     if ((*cb) == ir) {
+       return *cb;
+     }
+     if (ir < (*cb)) {
+       auto cbnew = mCache.emplace(cb); // insert new element before cb
+       (*cbnew) = ir;
+       return (*cbnew);
+     }
+   }
+   return mCache.front();
+ }
+ //_____________________________________________________________________________
+ o2::fv0::Digitizer::BCCache* Digitizer::getBCCache(const o2::InteractionRecord& ir)
+ {
+   // get pointer on existing cache
+   for (auto cb = mCache.begin(); cb != mCache.end(); cb++) {
+     if ((*cb) == ir) {
+       return &(*cb);
+     }
+   }
+   return nullptr;
+ }}

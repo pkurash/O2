@@ -22,6 +22,7 @@
 #include <CommonDataFormat/InteractionRecord.h>
 #include <array>
 #include <vector>
+#include <deque>
 
 namespace o2
 {
@@ -54,7 +55,12 @@ class Digitizer
   void setSrcId(Int_t id) { mSrcId = id; }
   void setInteractionRecord(const InteractionTimeRecord& ir) { mIntRecord = ir; }
 
-  void process(const std::vector<o2::fv0::Hit>& hits);
+//void process(const std::vector<o2::fv0::Hit>& hits);
+  void process(const std::vector<o2::fv0::Hit>& hits,
+                        std::vector<fv0::BCData>& digitsBC,
+                        std::vector<fv0::ChannelData>& digitsCh,
+                        dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+
   void analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
                                 std::vector<fv0::ChannelData>& digitsCh,
                                 dataformats::MCTruthContainer<fv0::MCLabel>& labels);
@@ -64,12 +70,30 @@ class Digitizer
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
 
+  struct BCCache : public o2::InteractionRecord {
+    std::vector<o2::fv0::MCLabel> labels;
+
+    BCCache& operator=(const o2::InteractionRecord& ir)
+    {
+      o2::InteractionRecord::operator=(ir);
+      return *this;
+    }
+     void print() const;
+  };
+
  private:
   long mTimeStamp;              // TF (run) timestamp
   InteractionRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
   std::vector<fv0::MCLabel> mMCLabels;
+
+  std::deque<BCCache> mCache;
+
+  static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+
+  BCCache& setBCCache(const o2::InteractionRecord& ir);
+  BCCache* getBCCache(const o2::InteractionRecord& ir);
 
   std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                    // Number of bins in pulse series
