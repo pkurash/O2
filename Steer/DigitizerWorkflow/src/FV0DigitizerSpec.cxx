@@ -98,7 +98,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
      o2::InteractionTimeRecord terminateIR;
      terminateIR.orbit = 0xffffffff; // supply IR in the infinite future to flush all cached BC
      mDigitizer.setInteractionRecord(terminateIR);
-     mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
+     mDigitizer.flush(mDigitsBC, mDigitsCh, mLabels);
 
     // send out to next stage
     pc.outputs().snapshot(Output{"FV0", "DIGITSBC", 0, Lifetime::Timeframe}, mDigitsBC);
