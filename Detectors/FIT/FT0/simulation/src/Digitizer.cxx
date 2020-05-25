@@ -281,6 +281,7 @@ void Digitizer::flush(std::vector<o2::ft0::Digit>& digitsBC,
                       o2::dataformats::MCTruthContainer<o2::ft0::MCLabel>& labels)
 {
   LOG(DEBUG) << "firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+  LOG(INFO) << "differenceInBC = " <<  mIntRecord.differenceInBC(firstBCinDeque);
   assert(firstBCinDeque <= mIntRecord);
   while (firstBCinDeque < mIntRecord && !mCache.empty()) {
     storeBC(mCache.front(), digitsBC, digitsCh, labels);

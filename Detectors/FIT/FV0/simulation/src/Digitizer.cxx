@@ -13,6 +13,7 @@
 
 #include <TRandom.h>
 #include <algorithm>
+#include <cassert>
 
 ClassImp(o2::fv0::Digitizer);
 
@@ -23,6 +24,7 @@ void Digitizer::clear()
 {
   mEventId = -1;
   mSrcId = -1;
+  mCache.erase(mCache.begin(), mCache.end());
   for (auto& analogSignal : mPmtChargeVsTime) {
     std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
   }
@@ -144,45 +146,45 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits,
       Int_t const nPhE = SimulateLightYield(detId, nPhotons);
       Float_t const t = hit.GetTime() * 1e9 + FV0DigParam::Instance().pmtTransitTime;
       Float_t timeHit = t;
-      timeHit -= 320 / o2::constants::physics::LightSpeedCm2NS;// TOF correction
-      timeHit += mIntRecord.timeNS;
-      o2::InteractionRecord irHit(timeHit);
+      timeHit -= 320. / o2::constants::physics::LightSpeedCm2NS;// TOF correction
+   //   timeHit += mIntRecord.timeNS;
+      LOG(INFO) << "initial time: " << t << " hit time: " << timeHit << " IR time: " << mIntRecord.timeNS;
+      o2::InteractionTimeRecord irHit(timeHit);
+      LOG(INFO) << "irHit: " << irHit.timeNS;
 
-      std::array<o2::InteractionRecord, NBC2Cache> cachedIR;
-      int nCachedIR = 0;
-      for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
-        double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
-        cachedIR[nCachedIR].setFromNS(tNS);
-        if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
-          continue; // don't go to negative BC/orbit (it will wrap)
-        }
-        setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
-    }
-
-    createPulse(nPhE, hit.GetTrackID(), timeHit, cachedIR, nCachedIR, detId);
+     if (mCache.size() <= irHit.bc) {
+        mCache.resize(irHit.bc + 1);
+        LOG(INFO) << "mCache.size() = " << mCache.size();
+     }
+    
+   createPulse(nPhE, hit.GetTrackID(), timeHit, detId);
 
     }
   } //hit loop
 }
 
 //____________________________________________________________________________
-void Digitizer::createPulse(int nPhE, int parentId , double timeHit,
-                            std::array<o2::InteractionRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId)
+ // void Digitizer::createPulse(int nPhE, int parentId , double timeHit,
+ // std::array<o2::InteractionTimeRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId)
+void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId)
 {
   auto const roundVc = [&](int i) -> int {
     return (i / Vc::float_v::Size) * Vc::float_v::Size;
   };
   Int_t parentIdPrev = -10;
-  Bool_t added[nCachedIR];
-  for (int ir = 0; ir < nCachedIR; ir++){
-    added[ir] = kFALSE;
-  }
+ // Bool_t added[nCachedIR];
+ // for (int ir = 0; ir < nCachedIR; ir++){
+ // added[ir] = kFALSE;
+ // }
 
   Float_t const charge = TMath::Qe() * FV0DigParam::Instance().pmtGain * mBinSize / mPmtTimeIntegral;
 
-  double time0 = cachedIR[0].bc2ns(); // start time of the 1st cashed BC
-  float timeDiff = time0 - timeHit;
+  //double time0 = cachedIR[0].bc2ns(); // start time of the 1st cashed BC
+  float timeDiff = /*time0 -*/ timeHit;
+//  float timeDiff = timeHit - mCache[0].bc2ns();
+  LOG(INFO) << "timeDiff = " << timeDiff;
 
+  mPmtChargeVsTime[detId].resize(mNBins*mCache.size());
   auto& analogSignal = mPmtChargeVsTime[detId];
 
   for (Int_t iPhE = 0; iPhE < nPhE; ++iPhE) {
@@ -190,10 +192,10 @@ void Digitizer::createPulse(int nPhE, int parentId , double timeHit,
 
     Int_t const firstBin = roundVc(TMath::Max((Int_t)0,
                     (Int_t)((tPhE - FV0DigParam::Instance().pmtTransitTime) / mBinSize)));
-    Int_t const lastBin  = TMath::Min((Int_t)(NBC2Cache * mNBins - 1),
+//    Int_t const lastBin  = TMath::Min((Int_t)(NBC2Cache * mNBins - 1),
+    Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
                            (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
     Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
-    //Float_t* p = analogSignal.data() + firstBin;
     long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
     
     LOG(INFO) << "firstBin = "<<firstBin<<" lastbin "<<lastBin;
@@ -225,46 +227,46 @@ void Digitizer::createPulse(int nPhE, int parentId , double timeHit,
        p += Vc::float_v::Size;
        Vc::prefetchForOneRead(p);
      }
-     added[ir] = kTRUE;
+  //   added[ir] = kTRUE;
    }
   } //photo electron loop
 
-  // Charged particles in MCLabel
-  for (int ir = 0; ir < nCachedIR; ir++){
-    if (parentId != parentIdPrev && added[ir]) {
-      mMCLabels.emplace_back(parentId, mEventId, mSrcId, detId);
-      parentIdPrev = parentId;
-      auto bcCache = getBCCache(cachedIR[ir]);
-      (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId);
+  for (int ir = 0; ir < mCache.size(); ir ++){
+    if (parentId != parentIdPrev){  
+     LOG(INFO) << "parentId = " << parentId << " mEventId = " << mEventId << " mSrcId = " << msrcId;
+     mCache[ir].labels.emplace_back(parentId, mEventId, mSrcId, detId);
+     parentIdPrev = parentId;
     } 
   }
+  mCache.shrink_to_fit();
 }
-//____________________________________________________________________________
+
+//------------------------------------------------------------------------------
 void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
-                     std::vector<o2::fv0::ChannelData>& digitsCh,
-                     o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
+                      std::vector<o2::fv0::ChannelData>& digitsCh,
+                      o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
 {
-//   size_t const first = digitsCh.size();
-   size_t nStored = 0;
-   int  nCached = mCache.size();
-   LOG(INFO) << "nCached = " << nCached;
-   if (nCached < 1) {
-     return;
-  }
-  LOG(INFO) << "differenceInBC = " <<  mIntRecord.differenceInBC(mCache.back());
-  if (mIntRecord.differenceInBC(mCache.back()) > -BCCacheMin) {
-    //LOG(DEBUG) << "Generating new pedestal BL fluct. for BC range " << mCache.front() << " : " << mCache.back();
-  } else {
-    return;
-  }
-  for (Int_t ibc = 0; ibc < nCached; ibc ++){
-    auto& bc = mCache[ibc];
-    analyseWaveformsAndStore(bc, digitsBC, digitsCh, labels);
-  }
-   
-  // clean cache for BCs which are not needed anymore
-  LOG(INFO) << "Cleaning cache";
-  mCache.erase(mCache.begin(), mCache.end());
+   LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+   assert(firstBCinDeque <= mIntRecord);
+   while (!mCache.empty()) {
+     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels);
+     mCache.pop_front();
+     ++firstBCinDeque; 
+   }
+   firstBCinDeque = mIntRecord;
+}
+//------------------------------------------------------------------------------
+void Digitizer::flush_all(std::vector<o2::fv0::BCData>& digitsBC,
+                          std::vector<o2::fv0::ChannelData>& digitsCh,
+                          o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
+{
+   LOG(INFO) << "flush_all: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+   assert(firstBCinDeque <= mIntRecord);
+   while (!mCache.empty()) {
+     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels);
+     mCache.pop_front();
+     ++firstBCinDeque;
+   }
 }
 //-----------------------------------------------------------------------------
 void Digitizer::analyseWaveformsAndStore(const BCCache& bc,
@@ -278,7 +280,7 @@ void Digitizer::analyseWaveformsAndStore(const BCCache& bc,
   for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
     Float_t totalCharge = 0.0f;
     auto const& analogSignal = mPmtChargeVsTime[ipmt];
-    for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++iTimeBin) {
+    for (Int_t iTimeBin = 0; iTimeBin < mPmtChargeVsTime[ipmt].size()/*mNBins*/; ++iTimeBin) {
       Float_t const timeBinCharge = mPmtChargeVsTime[ipmt][iTimeBin];
       totalCharge += timeBinCharge;
     }
@@ -289,14 +291,15 @@ void Digitizer::analyseWaveformsAndStore(const BCCache& bc,
 
   // Send MClabels and digitsBC to storage
   size_t const nBC = digitsBC.size();
+  LOG(INFO) << "nBC = " << nBC << " first = " << first << " nStored = " << nStored;
   digitsBC.emplace_back(first, nStored, bc);
-  for (auto const& lbl : mMCLabels) {
+  for (auto const& lbl : bc.labels) {
     labels.addElement(nBC, lbl);
   }
-  mMCLabels.clear();
+ // mMCLabels.clear();
 }
 //_____________________________________________________________________________
-o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionRecord& ir)
+o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionTimeRecord& ir)
 {
    if (mCache.empty() || mCache.back() < ir) {
      mCache.emplace_back();
@@ -324,7 +327,7 @@ o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionRecord& 
    return mCache.front();
 }
 //_____________________________________________________________________________
-o2::fv0::Digitizer::BCCache* Digitizer::getBCCache(const o2::InteractionRecord& ir)
+o2::fv0::Digitizer::BCCache* Digitizer::getBCCache(const o2::InteractionTimeRecord& ir)
 {
    // get pointer on existing cache
    for (auto cb = mCache.begin(); cb != mCache.end(); cb++) {
@@ -352,12 +355,13 @@ Int_t Digitizer::SimulateLightYield(Int_t pmt, Int_t nPhot) const
   return n;
 }
 
+//-----------------------------------------------------------------------------
 Float_t Digitizer::SimulateTimeCfd(Int_t channel) const
 {
   Float_t timeCfd = -1024.0f;
   Int_t const binShift = TMath::Nint(FV0DigParam::Instance().timeShiftCfd / mBinSize);
   Float_t sigPrev = -mPmtChargeVsTime[channel][0];
-  for (Int_t iTimeBin = 1; iTimeBin < mNBins; ++iTimeBin) {
+  for (Int_t iTimeBin = 1; iTimeBin < mPmtChargeVsTime[channel].size()/*mNBins*/; ++iTimeBin) {
     Float_t const sigCurrent = (iTimeBin >= binShift
                                   ? 5.0f * mPmtChargeVsTime[channel][iTimeBin - binShift] - mPmtChargeVsTime[channel][iTimeBin]
                                   : -mPmtChargeVsTime[channel][iTimeBin]);
