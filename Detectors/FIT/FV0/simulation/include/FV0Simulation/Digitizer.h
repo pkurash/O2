@@ -60,14 +60,16 @@ class Digitizer
 
 //void process(const std::vector<o2::fv0::Hit>& hits);
   void process(const std::vector<o2::fv0::Hit>& hits,
-                        std::vector<fv0::BCData>& digitsBC,
-                        std::vector<fv0::ChannelData>& digitsCh,
-                        dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+                     std::vector<fv0::BCData>& digitsBC,
+                     std::vector<fv0::ChannelData>& digitsCh,
+                     dataformats::MCTruthContainer<fv0::MCLabel>& labels);
 
   const InteractionRecord& getInteractionRecord() const { return mIntRecord; }
   InteractionRecord& getInteractionRecord(InteractionRecord& src) { return mIntRecord; }
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
+
+  std::vector<bool> added;
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
@@ -106,7 +108,7 @@ class Digitizer
  // static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
   static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
  // void createPulse(int nPhE, int parentId, double timeHit, std::array<o2::InteractionTimeRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId);
-  void createPulse(int nPhE, int parentId, double timeHit, int detId);
+  void createPulse(int nPhE, int parentId, double timeHit, int detId, int eventId, int srcId);
 
 
   BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
