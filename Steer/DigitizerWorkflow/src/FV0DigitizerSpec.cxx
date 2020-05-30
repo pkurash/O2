@@ -85,21 +85,26 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
         // call actual digitization procedure
         mDigitizer.setEventId(part.entryID);
         mDigitizer.setSrcId(part.sourceID);
-        mDigitizer.process(hits);
+        //mDigitizer.process(hits);
+        mDigitizer.process(hits, mDigitsBC, mDigitsCh, mLabels);
       }
-      mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
+      //mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
       LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements";
     }
 
     // here we have all digits and we can send them to consumer (aka snapshot it onto output)
     LOG(INFO) << "FV0: Sending " << mDigitsBC.size() << " digitsBC and " << mDigitsCh.size() << " digitsCh.";
 
+     o2::InteractionTimeRecord terminateIR;
+     terminateIR.orbit = 0xffffffff; // supply IR in the infinite future to flush all cached BC
+     mDigitizer.setInteractionRecord(terminateIR);
+     mDigitizer.flush(mDigitsBC, mDigitsCh, mLabels);
+
     // send out to next stage
     pc.outputs().snapshot(Output{"FV0", "DIGITSBC", 0, Lifetime::Timeframe}, mDigitsBC);
     pc.outputs().snapshot(Output{"FV0", "DIGITSCH", 0, Lifetime::Timeframe}, mDigitsCh);
-    if (pc.outputs().isAllowed({"FV0", "DIGITLBL", 0})) {
-      pc.outputs().snapshot(Output{"FV0", "DIGITLBL", 0, Lifetime::Timeframe}, mLabels);
-    }
+    pc.outputs().snapshot(Output{"FV0", "DIGITLBL", 0, Lifetime::Timeframe}, mLabels);
+
     LOG(INFO) << "FV0: Sending ROMode= " << mROMode << " to GRPUpdater";
     pc.outputs().snapshot(Output{"FV0", "ROMode", 0, Lifetime::Timeframe}, mROMode);
 
@@ -120,26 +125,21 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
   o2::parameters::GRPObject::ROMode mROMode = o2::parameters::GRPObject::CONTINUOUS; // readout mode
 };
 
-o2::framework::DataProcessorSpec getFV0DigitizerSpec(int channel, bool mctruth)
+o2::framework::DataProcessorSpec getFV0DigitizerSpec(int channel)
 {
   // create the full data processor spec using
   //  a name identifier
   //  input description
   //  algorithmic description (here a lambda getting called once to setup the actual processing function)
   //  options that can be used for this processor (here: input file names where to take the hits)
-  std::vector<OutputSpec> outputs;
-  outputs.emplace_back("FV0", "DIGITSBC", 0, Lifetime::Timeframe);
-  outputs.emplace_back("FV0", "DIGITSCH", 0, Lifetime::Timeframe);
-  if (mctruth) {
-    outputs.emplace_back("FV0", "DIGITLBL", 0, Lifetime::Timeframe);
-  }
-  outputs.emplace_back("FV0", "ROMode", 0, Lifetime::Timeframe);
-
   return DataProcessorSpec{
     "FV0Digitizer",
     Inputs{InputSpec{"collisioncontext", "SIM", "COLLISIONCONTEXT", static_cast<SubSpecificationType>(channel), Lifetime::Timeframe}},
 
-    outputs,
+    Outputs{OutputSpec{"FV0", "DIGITSBC", 0, Lifetime::Timeframe},
+            OutputSpec{"FV0", "DIGITSCH", 0, Lifetime::Timeframe},
+            OutputSpec{"FV0", "DIGITLBL", 0, Lifetime::Timeframe},
+            OutputSpec{"FV0", "ROMode", 0, Lifetime::Timeframe}},
 
     AlgorithmSpec{adaptFromTask<FV0DPLDigitizerTask>()},
 

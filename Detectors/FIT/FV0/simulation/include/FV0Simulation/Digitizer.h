@@ -20,8 +20,12 @@
 #include <SimulationDataFormat/MCTruthContainer.h>
 #include <MathUtils/RandomRing.h>
 #include <CommonDataFormat/InteractionRecord.h>
+#include "CommonConstants/LHCConstants.h"
+#include "CommonConstants/PhysicsConstants.h"
+
 #include <array>
 #include <vector>
+#include <deque>
 
 namespace o2
 {
@@ -54,22 +58,51 @@ class Digitizer
   void setSrcId(Int_t id) { mSrcId = id; }
   void setInteractionRecord(const InteractionTimeRecord& ir) { mIntRecord = ir; }
 
-  void process(const std::vector<o2::fv0::Hit>& hits);
-  void analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
-                                std::vector<fv0::ChannelData>& digitsCh,
-                                dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+//void process(const std::vector<o2::fv0::Hit>& hits);
+  void process(const std::vector<o2::fv0::Hit>& hits,
+                        std::vector<fv0::BCData>& digitsBC,
+                        std::vector<fv0::ChannelData>& digitsCh,
+                        dataformats::MCTruthContainer<fv0::MCLabel>& labels);
 
   const InteractionRecord& getInteractionRecord() const { return mIntRecord; }
   InteractionRecord& getInteractionRecord(InteractionRecord& src) { return mIntRecord; }
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
 
+  struct BCCache : public o2::InteractionRecord {
+    std::vector<o2::fv0::MCLabel> labels;
+
+    BCCache& operator=(const o2::InteractionRecord& ir)
+    {
+      o2::InteractionRecord::operator=(ir);
+      return *this;
+    }
+     void print() const;
+  };
+
+  void flush(std::vector<o2::fv0::BCData>& digitsBC,
+             std::vector<o2::fv0::ChannelData>& digitsCh,
+             o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
+
+  void analyseWaveformsAndStore(const BCCache& bc,
+                                std::vector<fv0::BCData>& digitsBC,
+                                std::vector<fv0::ChannelData>& digitsCh,
+                                dataformats::MCTruthContainer<fv0::MCLabel>& labels);
  private:
   long mTimeStamp;              // TF (run) timestamp
-  InteractionRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
+  InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
   std::vector<fv0::MCLabel> mMCLabels;
+
+  std::deque<BCCache> mCache;
+
+ // static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  void createPulse(int nPhE, int parentId, double timeHit, std::array<o2::InteractionRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId);
+
+  BCCache& setBCCache(const o2::InteractionRecord& ir);
+  BCCache* getBCCache(const o2::InteractionRecord& ir);
 
   std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                    // Number of bins in pulse series
