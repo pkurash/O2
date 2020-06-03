@@ -19,6 +19,7 @@
 #include "FV0Simulation/MCLabel.h"
 #include "SimulationDataFormat/MCTruthContainer.h"
 #include "SimulationDataFormat/MCCompLabel.h"
+#include "TH1F.h"
 
 namespace o2
 {

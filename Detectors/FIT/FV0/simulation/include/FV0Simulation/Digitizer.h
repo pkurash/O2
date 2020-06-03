@@ -22,6 +22,9 @@
 #include <CommonDataFormat/InteractionRecord.h>
 #include "CommonConstants/LHCConstants.h"
 #include "CommonConstants/PhysicsConstants.h"
+#include "TH1F.h"
+#include "TH2F.h"
+#include "TList.h"
 
 #include <array>
 #include <vector>
@@ -73,7 +76,15 @@ class Digitizer
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
-
+    struct particle {
+      int hit_ch;
+      double hit_time;
+      friend bool operator<(particle const& a, particle const& b)
+      {
+        return (a.hit_ch != b.hit_ch) ? (a.hit_ch < b.hit_ch) : (a.hit_time < b.hit_time);
+      }
+    };
+    std::vector<particle> hits;
     BCCache& operator=(const o2::InteractionTimeRecord& ir)
     {
       o2::InteractionTimeRecord::operator=(ir);
@@ -94,6 +105,7 @@ class Digitizer
                                 std::vector<fv0::BCData>& digitsBC,
                                 std::vector<fv0::ChannelData>& digitsCh,
                                 dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+//			        TList *mHist);
  private:
   long mTimeStamp;              // TF (run) timestamp
   InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
@@ -102,6 +114,8 @@ class Digitizer
   std::vector<fv0::MCLabel> mMCLabels;
 
   std::deque<BCCache> mCache;
+
+  TList *mHist;
 
   o2::InteractionRecord firstBCinDeque = 0;
 

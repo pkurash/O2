@@ -119,7 +119,8 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
   std::vector<o2::fv0::ChannelData> mDigitsCh;
   std::vector<o2::fv0::BCData> mDigitsBC;
   o2::dataformats::MCTruthContainer<o2::fv0::MCLabel> mLabels; // labels which get filled
-
+  std::vector<TH1F*> mHist;
+ 
   // RS: at the moment using hardcoded flag for continuous readout
   o2::parameters::GRPObject::ROMode mROMode = o2::parameters::GRPObject::CONTINUOUS; // readout mode
 };
