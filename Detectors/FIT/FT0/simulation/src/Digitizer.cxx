@@ -174,6 +174,8 @@ void Digitizer::process(const std::vector<o2::ft0::HitType>* hits,
     if (mCache.size() <= relBC.bc) {
       mCache.resize(relBC.bc + 1);
     }
+    
+
     mCache[relBC.bc].hits.emplace_back(BCCache::particle{hit_ch, hit_time - relBC.bc2ns()});
 
     //charge particles in MCLabel
@@ -285,6 +287,7 @@ void Digitizer::flush(std::vector<o2::ft0::Digit>& digitsBC,
   while (firstBCinDeque < mIntRecord && !mCache.empty()) {
     storeBC(mCache.front(), digitsBC, digitsCh, labels);
     mCache.pop_front();
+    LOG(INFO) << "first = " << firstBCinDeque;
     ++firstBCinDeque;
   }
   firstBCinDeque = mIntRecord;

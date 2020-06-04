@@ -123,8 +123,8 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits,
   // use ordered hits
   for (auto ids : hitIdx) {
     const auto& hit = hits[ids];
-    Int_t detId = hit.GetDetectorID();
     Int_t parentIdPrev = -10;
+    Int_t detId = hit.GetDetectorID();
     Double_t hitEdep = hit.GetHitValue() * 1e3; //convert to MeV
 
     // TODO: check how big is inaccuracy if more than 1 'below-threshold' particles hit the same detector cell
@@ -158,9 +158,10 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits,
       Int_t const nPhE = SimulateLightYield(detId, nPhotons);
       Float_t const t = hit.GetTime() * 1e9 + FV0DigParam::Instance().pmtTransitTime;
       Float_t timeHit = t;
+      timeHit += mIntRecord.timeNS;
       timeHit -= 320. / o2::constants::physics::LightSpeedCm2NS;
-      LOG(INFO) << "event: " << mEventId <<  " initial time: " << t << " hit time: " << timeHit << " IR time: " << mIntRecord.timeNS;
-      o2::InteractionTimeRecord irHit(timeHit);
+      auto irHit = o2::InteractionTimeRecord{timeHit};
+//      o2::InteractionTimeRecord irHit(timeHit);
       LOG(INFO) << "irHit: " << irHit.timeNS;
 
       if (mCache.size() <= irHit.bc) {
@@ -169,18 +170,28 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits,
       }
 
       timeHit -= irHit.bc2ns();
+      LOG(INFO) << "event: " << mEventId <<  " initial time: " << t << " hit time: " << timeHit 
+                << " IR time: " << irHit << " main IR:" <<  mIntRecord;
 
-      int  parentId = hit.GetTrackID();
+      for (int i = 0; i < mCache.size(); i ++) {
+        LOG(INFO) << "IR nr " << i << ": " << mCache[i];
+      }  
 
-      createPulse(nPhE, parentId /*hit.GetTrackID()*/, timeHit, detId, mEventId, mSrcId);
+      int parentId = hit.GetTrackID();
 
-      mCache[irHit.bc].hits.emplace_back(BCCache::particle{detId, timeHit});
-  //   for (int ir = 0; ir < mCache.size(); ir ++){
-       if (parentId != parentIdPrev){  
-    //    LOG(INFO) << "ir = " << ir << " parentId = " << parentId << " mEventId = " << mEventId << " mSrcId = " << mSrcId;
+      if (parentId != parentIdPrev){  
+        createPulse(nPhE, parentId, timeHit, detId, mEventId, mSrcId);
         mCache[irHit.bc].labels.emplace_back(parentId, mEventId, mSrcId, detId);
         parentIdPrev = parentId;
-       } 
+      }
+      mCache[irHit.bc].hits.emplace_back(BCCache::particle{detId, timeHit});
+
+  //   for (int ir = 0; ir < mCache.size(); ir ++){
+ //      if (parentId != parentIdPrev){  
+    //    LOG(INFO) << "ir = " << ir << " parentId = " << parentId << " mEventId = " << mEventId << " mSrcId = " << mSrcId;
+     // mCache[irHit.bc].labels.emplace_back(parentId, mEventId, mSrcId, detId);
+     // parentIdPrev = parentId;
+     // }
    //  }
 
     }
@@ -198,6 +209,8 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
 
   float timeDiff = timeHit;
   LOG(INFO) << "timeDiff = " << timeDiff;
+  
+  std::vector<Bool_t> added;
 
   mPmtChargeVsTime[detId].resize(mNBins*mCache.size());
   auto& analogSignal = mPmtChargeVsTime[detId];
@@ -208,12 +221,24 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
     Int_t const firstBin = roundVc(TMath::Max((Int_t)0,
                                               (Int_t)((tPhE - FV0DigParam::Instance().pmtTransitTime) / mBinSize)));
 //    Int_t const lastBin  = TMath::Min((Int_t)(NBC2Cache * mNBins - 1),
-    Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
+/*    Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
                                       (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
+*/
+//    Int_t const firstBin = 0;
+    Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
+                                      (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / 
+                                      (o2::constants::lhc::LHCBunchSpacingNS/mNBins )));
+////    Int_t const lastBin  = mCache.size() * mNBins - 1;
+    
+    added.resize(mCache.size());
+    for (int ib = 0; ib < added.size(); ib ++){
+     added[ib] = kFALSE;
+    }
+
     Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
     long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
     
-  //  LOG(INFO) << "firstBin = "<<firstBin<<" lastbin "<<lastBin;
+   // LOG(INFO) << "firstBin = "<<firstBin<<" lastbin "<<lastBin;
 
     float const offset = tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime - Float_t(iStart) * mBinSize;
     long const iOffset = std::lround(offset / mBinSize * Float_t(DP::NUM_PMT_RESPONSE_TABLES - 1));
@@ -228,6 +253,7 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
     Float_t const* qEnd = &mPmtResponseTables[DP::NUM_PMT_RESPONSE_TABLES / 2 + iOffset].back();
 
     for (int ir = firstBin / mNBins; ir <= lastBin / mNBins; ir++) {
+      //LOG(INFO) << "ir = " << ir;
       int localFirst = (ir == firstBin / mNBins) ? firstBin : 0;
       int localLast = (ir < lastBin / mNBins) ? mNBins : (lastBin - ir * mNBins);
       float* p = analogSignal.data() + localFirst;
@@ -242,17 +268,16 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
         p += Vc::float_v::Size;
         Vc::prefetchForOneRead(p);
       }
-  //   added[ir] = kTRUE;
+     added[ir] = kTRUE;
    }
   } //photo electron loop
-/*
-  for (int ir = 0; ir < mCache.size(); ir ++){
-    if (parentId != parentIdPrev){  
+
+/*  for (int ir = 0; ir < mCache.size(); ir ++){
+    if (added[ir]){  
      LOG(INFO) << "ir = " << ir << " parentId = " << parentId << " mEventId = " << mEventId << " mSrcId = " << mSrcId;
      mCache[ir].labels.emplace_back(parentId, eventId, srcId, detId);
-     parentIdPrev = parentId;
     } 
-  }*/
+  } */
   //mCache.shrink_to_fit();
 }
 
@@ -265,6 +290,7 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
    assert(firstBCinDeque <= mIntRecord);
    while (!mCache.empty()) {
      analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels); //, mHist);
+     LOG(INFO) << "first = " << firstBCinDeque;
      mCache.pop_front();
      ++firstBCinDeque; 
    }
