@@ -170,11 +170,13 @@ void Digitizer::process(const std::vector<o2::ft0::HitType>* hits,
     Bool_t is_A_side = (hit_ch < 4 * mParameters.nCellsA);
     Float_t time_compensate = is_A_side ? mParameters.A_side_cable_cmps : mParameters.C_side_cable_cmps;
     Double_t hit_time = hit.GetTime() - time_compensate;
+
     auto relBC = o2::InteractionRecord{hit_time};
     if (mCache.size() <= relBC.bc) {
       mCache.resize(relBC.bc + 1);
     }
     
+    LOG(INFO) << "initial time: " << hit.GetTime() << " hit time: " << hit_time << " relBC " << relBC << " initial IR " << mIntRecord;
 
     mCache[relBC.bc].hits.emplace_back(BCCache::particle{hit_ch, hit_time - relBC.bc2ns()});
 

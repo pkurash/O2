@@ -22,9 +22,6 @@
 #include <CommonDataFormat/InteractionRecord.h>
 #include "CommonConstants/LHCConstants.h"
 #include "CommonConstants/PhysicsConstants.h"
-#include "TH1F.h"
-#include "TH2F.h"
-#include "TList.h"
 
 #include <array>
 #include <vector>
@@ -63,31 +60,21 @@ class Digitizer
 
 //void process(const std::vector<o2::fv0::Hit>& hits);
   void process(const std::vector<o2::fv0::Hit>& hits,
-                     std::vector<fv0::BCData>& digitsBC,
-                     std::vector<fv0::ChannelData>& digitsCh,
-                     dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+                        std::vector<fv0::BCData>& digitsBC,
+                        std::vector<fv0::ChannelData>& digitsCh,
+                        dataformats::MCTruthContainer<fv0::MCLabel>& labels);
 
   const InteractionRecord& getInteractionRecord() const { return mIntRecord; }
   InteractionRecord& getInteractionRecord(InteractionRecord& src) { return mIntRecord; }
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
 
-  std::vector<bool> added;
-
-  struct BCCache : public o2::InteractionTimeRecord {
+  struct BCCache : public o2::InteractionRecord {
     std::vector<o2::fv0::MCLabel> labels;
-    struct particle {
-      int hit_ch;
-      double hit_time;
-      friend bool operator<(particle const& a, particle const& b)
-      {
-        return (a.hit_ch != b.hit_ch) ? (a.hit_ch < b.hit_ch) : (a.hit_time < b.hit_time);
-      }
-    };
-    std::vector<particle> hits;
-    BCCache& operator=(const o2::InteractionTimeRecord& ir)
+
+    BCCache& operator=(const o2::InteractionRecord& ir)
     {
-      o2::InteractionTimeRecord::operator=(ir);
+      o2::InteractionRecord::operator=(ir);
       return *this;
     }
      void print() const;
@@ -97,15 +84,10 @@ class Digitizer
              std::vector<o2::fv0::ChannelData>& digitsCh,
              o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
 
-  void flush_all(std::vector<o2::fv0::BCData>& digitsBC,
-                 std::vector<o2::fv0::ChannelData>& digitsCh,
-                 o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
-
   void analyseWaveformsAndStore(const BCCache& bc,
                                 std::vector<fv0::BCData>& digitsBC,
                                 std::vector<fv0::ChannelData>& digitsCh,
                                 dataformats::MCTruthContainer<fv0::MCLabel>& labels);
-//			        TList *mHist);
  private:
   long mTimeStamp;              // TF (run) timestamp
   InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
@@ -115,18 +97,12 @@ class Digitizer
 
   std::deque<BCCache> mCache;
 
-  TList *mHist;
-
-  o2::InteractionRecord firstBCinDeque = 0;
-
  // static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
   static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
- // void createPulse(int nPhE, int parentId, double timeHit, std::array<o2::InteractionTimeRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId);
-  void createPulse(int nPhE, int parentId, double timeHit, int detId, int eventId, int srcId);
+  void createPulse(int nPhE, int parentId, double timeHit, std::array<o2::InteractionRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId);
 
-
-  BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
-  BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
+  BCCache& setBCCache(const o2::InteractionRecord& ir);
+  BCCache* getBCCache(const o2::InteractionRecord& ir);
 
   std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                    // Number of bins in pulse series

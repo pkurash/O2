@@ -96,7 +96,13 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
     // here we have all digits and we can send them to consumer (aka snapshot it onto output)
     LOG(INFO) << "FV0: Sending " << mDigitsBC.size() << " digitsBC and " << mDigitsCh.size() << " digitsCh.";
 
-    mDigitizer.flush_all(mDigitsBC, mDigitsCh, mLabels);
+
+    o2::InteractionTimeRecord terminateIR;
+    terminateIR.orbit = 0xffffffff; // supply IR in the infinite future to flush all cached BC
+    mDigitizer.setInteractionRecord(terminateIR);
+
+//    mDigitizer.flush_all(mDigitsBC, mDigitsCh, mLabels);
+    mDigitizer.flush(mDigitsBC, mDigitsCh, mLabels);
 
     // send out to next stage
     pc.outputs().snapshot(Output{"FV0", "DIGITSBC", 0, Lifetime::Timeframe}, mDigitsBC);
@@ -119,7 +125,6 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
   std::vector<o2::fv0::ChannelData> mDigitsCh;
   std::vector<o2::fv0::BCData> mDigitsBC;
   o2::dataformats::MCTruthContainer<o2::fv0::MCLabel> mLabels; // labels which get filled
-  std::vector<TH1F*> mHist;
  
   // RS: at the moment using hardcoded flag for continuous readout
   o2::parameters::GRPObject::ROMode mROMode = o2::parameters::GRPObject::CONTINUOUS; // readout mode
