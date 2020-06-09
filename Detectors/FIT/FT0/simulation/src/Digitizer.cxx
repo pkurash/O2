@@ -266,6 +266,7 @@ void Digitizer::storeBC(BCCache& bc,
 
   digitsBC.emplace_back(first, nStored, firstBCinDeque, triggers, mEventID);
   size_t const nBC = digitsBC.size();
+  LOG(INFO) << "nBC = " << nBC;
   for (auto const& lbl : bc.labels)
     labels.addElement(nBC - 1, lbl);
 
@@ -284,12 +285,13 @@ void Digitizer::flush(std::vector<o2::ft0::Digit>& digitsBC,
                       std::vector<o2::ft0::ChannelData>& digitsCh,
                       o2::dataformats::MCTruthContainer<o2::ft0::MCLabel>& labels)
 {
-  LOG(DEBUG) << "firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+  LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord
+             << " cache size " << mCache.size();
   assert(firstBCinDeque <= mIntRecord);
   while (firstBCinDeque < mIntRecord && !mCache.empty()) {
+    LOG(INFO) << "flush: mCache.size() = " << mCache.size();
     storeBC(mCache.front(), digitsBC, digitsCh, labels);
     mCache.pop_front();
-    LOG(INFO) << "first = " << firstBCinDeque;
     ++firstBCinDeque;
   }
   firstBCinDeque = mIntRecord;
@@ -299,9 +301,11 @@ void Digitizer::flush_all(std::vector<o2::ft0::Digit>& digitsBC,
                           std::vector<o2::ft0::ChannelData>& digitsCh,
                           o2::dataformats::MCTruthContainer<o2::ft0::MCLabel>& labels)
 {
-  LOG(INFO) << "firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+  LOG(INFO) << "flush_all: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord
+             << " cache size " << mCache.size();
   assert(firstBCinDeque <= mIntRecord);
   while (!mCache.empty()) {
+    LOG(INFO) << "flush_all: mCache.size() = " << mCache.size() ;
     storeBC(mCache.front(), digitsBC, digitsCh, labels);
     mCache.pop_front();
     ++firstBCinDeque;
