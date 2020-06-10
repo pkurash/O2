@@ -266,6 +266,20 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
 }
 
 //------------------------------------------------------------------------------/
+void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
+                      std::vector<o2::fv0::ChannelData>& digitsCh,
+                      o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
+{
+   LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
+   assert(firstBCinDeque <= mIntRecord);
+   while (firstBCinDeque < mIntRecord && !mCache.empty()) {
+     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels); //, mHist);
+     mCache.pop_front();
+     ++firstBCinDeque; 
+   }
+   firstBCinDeque = mIntRecord;
+}
+//------------------------------------------------------------------------------
 /*
 void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
                       std::vector<o2::fv0::ChannelData>& digitsCh,
@@ -273,26 +287,13 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
 {
    LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
    assert(firstBCinDeque <= mIntRecord);
-   while (!mCache.empty()) {
-     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels); //, mHist);
+   for(int i = 0; i < mCache.size(); i++) {
+     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels);    
      mCache.pop_front();
-     ++firstBCinDeque; 
    }
    firstBCinDeque = mIntRecord;
 }
 */
-//------------------------------------------------------------------------------
-void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
-                      std::vector<o2::fv0::ChannelData>& digitsCh,
-                      o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
-{
-   LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
-   assert(firstBCinDeque <= mIntRecord);
-   for(int i = 0; i < mCache.size(); i++) {
-     analyseWaveformsAndStore(mCache[i], digitsBC, digitsCh, labels);    
-   }
-   firstBCinDeque = mIntRecord;
-}
 //------------------------------------------------------------------------------
 void Digitizer::flush_all(std::vector<o2::fv0::BCData>& digitsBC,
                           std::vector<o2::fv0::ChannelData>& digitsCh,
