@@ -222,7 +222,7 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
     Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
     long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
     
-    LOG(INFO) << "firstBin = " << firstBin << " lastbin = " << lastBin;
+   // LOG(INFO) << "firstBin = " << firstBin << " lastbin = " << lastBin;
 
     float const offset = tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime - Float_t(iStart) * mBinSize;
     long const iOffset = std::lround(offset / mBinSize * Float_t(DP::NUM_PMT_RESPONSE_TABLES - 1));
@@ -262,10 +262,11 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
      parentIdPrev = parentId;
     } 
   }
-  //mCache.shrink_to_fit();
+  mCache.shrink_to_fit();
 }
 
 //------------------------------------------------------------------------------/
+/*
 void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
                       std::vector<o2::fv0::ChannelData>& digitsCh,
                       o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
@@ -279,8 +280,8 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
    }
    firstBCinDeque = mIntRecord;
 }
+*/
 //------------------------------------------------------------------------------
-/*
 void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
                       std::vector<o2::fv0::ChannelData>& digitsCh,
                       o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels)
@@ -288,12 +289,14 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
    LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
    assert(firstBCinDeque <= mIntRecord);
    for(int i = 0; i < mCache.size(); i++) {
-     analyseWaveformsAndStore(mCache.front(), digitsBC, digitsCh, labels);    
-     mCache.pop_front();
+     analyseWaveformsAndStore(mCache[i], digitsBC, digitsCh, labels);
+     if (mCache.front() < mIntRecord) {
+      mCache.pop_front();
+      ++firstBCinDeque;
+     }
    }
    firstBCinDeque = mIntRecord;
 }
-*/
 //------------------------------------------------------------------------------
 void Digitizer::flush_all(std::vector<o2::fv0::BCData>& digitsBC,
                           std::vector<o2::fv0::ChannelData>& digitsCh,
@@ -336,7 +339,7 @@ void Digitizer::analyseWaveformsAndStore(const BCCache& bc,
   }
 
   // Send MClabels and digitsBC to storage
-  digitsBC.emplace_back(first, nStored, bc);
+  digitsBC.emplace_back(first, nStored, bc);// bc);
   size_t const nBC = digitsBC.size();
   LOG(INFO) << "nBC = " << nBC << " first = " << first << " nStored = " << nStored << " bc = " << bc;
 

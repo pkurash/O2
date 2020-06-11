@@ -76,17 +76,7 @@ class Digitizer
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
-    /*
-    struct particle {
-      int hit_ch;
-      double hit_time;
-      friend bool operator<(particle const& a, particle const& b)
-      {
-        return (a.hit_ch != b.hit_ch) ? (a.hit_ch < b.hit_ch) : (a.hit_time < b.hit_time);
-      }
-    };
-    std::vector<particle> hits;
-    */
+    
     BCCache& operator=(const o2::InteractionTimeRecord& ir)
     {
       o2::InteractionTimeRecord::operator=(ir);
