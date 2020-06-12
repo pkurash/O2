@@ -205,7 +205,8 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
 
   Float_t const charge = TMath::Qe() * FV0DigParam::Instance().pmtGain * mBinSize / mPmtTimeIntegral;
 
-  float timeDiff = timeHit;
+  float time0 = mCache[0].bc2ns();
+  float timeDiff = timeHit;// - time0;
   LOG(INFO) << "timeDiff = " << timeDiff;
 
   mPmtChargeVsTime[detId].resize(mNBins*mCache.size());
@@ -222,7 +223,7 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
     Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
     long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
     
-   // LOG(INFO) << "firstBin = " << firstBin << " lastbin = " << lastBin;
+    LOG(INFO) << "firstBin = " << firstBin << " lastbin = " << lastBin;
 
     float const offset = tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime - Float_t(iStart) * mBinSize;
     long const iOffset = std::lround(offset / mBinSize * Float_t(DP::NUM_PMT_RESPONSE_TABLES - 1));
@@ -262,7 +263,7 @@ void Digitizer::createPulse(int nPhE, int parentId, double timeHit, int detId, i
      parentIdPrev = parentId;
     } 
   }
-  mCache.shrink_to_fit();
+  
 }
 
 //------------------------------------------------------------------------------/
@@ -290,10 +291,9 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
    assert(firstBCinDeque <= mIntRecord);
    for(int i = 0; i < mCache.size(); i++) {
      analyseWaveformsAndStore(mCache[i], digitsBC, digitsCh, labels);
-     if (mCache.front() < mIntRecord) {
-      mCache.pop_front();
-      ++firstBCinDeque;
-     }
+     LOG(INFO) << "flush: mCache[" << i << "].timeNS = " << mCache[i].timeNS 
+               << " mIntRecord.timeNS = " << mIntRecord.timeNS - firstBCinDeque.timeNS;
+    // mCache.pop_front();
    }
    firstBCinDeque = mIntRecord;
 }

@@ -109,7 +109,7 @@ class Digitizer
 
   TList *mHist;
 
-  o2::InteractionRecord firstBCinDeque = 0;
+  o2::InteractionTimeRecord firstBCinDeque = 0;
 
  // static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
   static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
