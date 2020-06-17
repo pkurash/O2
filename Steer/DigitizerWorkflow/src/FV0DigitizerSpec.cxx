@@ -72,7 +72,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
     // (aka loop over all the interaction records)
     std::vector<o2::fv0::Hit> hits;
     for (int collID = 0; collID < irecords.size(); ++collID) {
-      mDigitizer.clear();
+    //  mDigitizer.clear();
       const auto& irec = irecords[collID];
       mDigitizer.setInteractionRecord(irec);
       // for each collision, loop over the constituents event and source IDs
@@ -80,19 +80,23 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
       for (auto& part : eventParts[collID]) {
         hits.clear();
         context->retrieveHits(mSimChains, "FV0Hit", part.sourceID, part.entryID, &hits);
-        LOG(INFO) << "[FV0] For collision " << collID << " eventID " << part.entryID << " found " << hits.size() << " hits ";
-
+        LOG(INFO) << "[FV0] For collision " << collID << " eventID " << part.entryID << " sourceID " 
+	          << part.sourceID <<  " found " << hits.size() << " hits ";
         // call actual digitization procedure
         mDigitizer.setEventId(part.entryID);
         mDigitizer.setSrcId(part.sourceID);
-        mDigitizer.process(hits);
+        //mDigitizer.process(hits);
+        mDigitizer.process(hits, mDigitsBC, mDigitsCh, mLabels);
       }
-      mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
+      //mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
       LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements";
     }
 
     // here we have all digits and we can send them to consumer (aka snapshot it onto output)
     LOG(INFO) << "FV0: Sending " << mDigitsBC.size() << " digitsBC and " << mDigitsCh.size() << " digitsCh.";
+
+    mDigitizer.flush_all(mDigitsBC, mDigitsCh, mLabels);
+//   mDigitizer.flush(mDigitsBC, mDigitsCh, mLabels);
 
     // send out to next stage
     pc.outputs().snapshot(Output{"FV0", "DIGITSBC", 0, Lifetime::Timeframe}, mDigitsBC);
@@ -115,7 +119,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
   std::vector<o2::fv0::ChannelData> mDigitsCh;
   std::vector<o2::fv0::BCData> mDigitsBC;
   o2::dataformats::MCTruthContainer<o2::fv0::MCLabel> mLabels; // labels which get filled
-
+ 
   // RS: at the moment using hardcoded flag for continuous readout
   o2::parameters::GRPObject::ROMode mROMode = o2::parameters::GRPObject::CONTINUOUS; // readout mode
 };
