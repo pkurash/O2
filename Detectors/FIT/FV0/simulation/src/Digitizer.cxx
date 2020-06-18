@@ -301,10 +301,10 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
 {
    LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
    assert(firstBCinDeque <= mIntRecord);
-   for (int i = 0; i < mCache.size(); i++) {
-     if (mCache[i] >  mIntRecord) {
-      return;
-     } 
+  // for (int i = 0; i < mCache.size(); i++) {
+  //   if (mCache[i] >  mIntRecord) {
+  //    return;
+  // } 
      analyseWaveformsAndStore(mCache[i], digitsBC, digitsCh, labels);
      LOG(INFO) << "flush: mCache[" << i << "].getTimeNS() = " << mCache[i].getTimeNS() 
                << " mIntRecord.getTimeNS() = " << mIntRecord.getTimeNS() - firstBCinDeque.getTimeNS();       
