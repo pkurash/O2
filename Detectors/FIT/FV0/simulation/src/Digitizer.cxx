@@ -301,7 +301,7 @@ void Digitizer::flush(std::vector<o2::fv0::BCData>& digitsBC,
 {
    LOG(INFO) << "flush: firstBCinDeque " << firstBCinDeque << " mIntRecord " << mIntRecord;
    assert(firstBCinDeque <= mIntRecord);
-  // for (int i = 0; i < mCache.size(); i++) {
+   for (int i = 0; i < mCache.size(); i++) {
   //   if (mCache[i] >  mIntRecord) {
   //    return;
   // } 
