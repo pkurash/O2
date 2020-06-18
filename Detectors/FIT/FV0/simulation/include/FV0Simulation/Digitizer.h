@@ -83,6 +83,7 @@ public:
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
+    std::array<float, DP::NCHANNELS> CFD_times;
     std::array<ChannelBCDataF, DP::NCHANNELS> mPmtChargeVsTime = {};
 
     void clear()
