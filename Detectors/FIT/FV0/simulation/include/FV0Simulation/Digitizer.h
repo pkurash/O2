@@ -41,12 +41,12 @@ class Digitizer
   typedef math_utils::RandomRing<float_v::size() * DP::HIT_RANDOM_RING_SIZE> HitRandomRingType;
   typedef math_utils::RandomRing<float_v::size() * DP::PHE_RANDOM_RING_SIZE> PheRandomRingType;
 
- public:
-  Digitizer()
-    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
-  {
-  }
-
+public:
+   Digitizer()
+     : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
+   {
+   }
+  
   /// Destructor
   ~Digitizer() = default;
 
@@ -74,9 +74,27 @@ class Digitizer
 
   std::vector<bool> added;
 
+                                                    // private:
+//  UInt_t mNBins = FV0DigParam::Instance().waveformNbins;      //Will be computed using detector set-up from CDB
+                                                    // Number of bins in mPmtChargeVsTime series
+                                                    // using ChannelBCDataF = std::array<float, 2000 /*NTimeBinsPerBC*/>;
+
+  using ChannelBCDataF = std::vector<float>;
+
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
-    
+    std::array<ChannelBCDataF, DP::NCHANNELS> mPmtChargeVsTime = {};
+
+    void clear()
+    {
+      for(auto& channel : mPmtChargeVsTime) {
+        //channel.fill(0.);a
+        std::fill(channel.begin(), channel.end(), 0.);
+      }
+    } 
+
+    BCCache();
+
     BCCache& operator=(const o2::InteractionTimeRecord& ir)
     {
       o2::InteractionTimeRecord::operator=(ir);
@@ -111,18 +129,15 @@ class Digitizer
 
   o2::InteractionTimeRecord firstBCinDeque = 0;
 
- // static constexpr int BCCacheMin = -1, BCCacheMax = 10, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
   static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
- // void createPulse(int nPhE, int parentId, double timeHit, std::array<o2::InteractionTimeRecord, NBC2Cache> const& cachedIR, int nCachedIR, int detId);
   void createPulse(int nPhE, int parentId, double timeHit, int detId, int eventId, int srcId);
-
 
   BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
   BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
 
-  std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
-  UInt_t mNBins;                                                    // Number of bins in pulse series
-  Float_t mBinSize;                                                 // Time width of the pulse bin - HPTDC resolution
+//  std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal mPmtChargeVsTime from PM
+  UInt_t mNBins;                                                    // Number of bins in mPmtChargeVsTime series
+  Float_t mBinSize;                                                 // Time width of the mPmtChargeVsTime bin - HPTDC resolution
   Float_t mPmtTimeIntegral;                                         //
 
   // Random rings
@@ -136,7 +151,9 @@ class Digitizer
 
   // Internal helper methods related to conversion of energy-deposition into photons -> photoelectrons -> el. signal
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
-  Float_t SimulateTimeCfd(Int_t channel) const;
+  //Float_t SimulateTimeCfd(Int_t channel) const;
+  Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
+  Float_t integrateCharge(const ChannelBCDataF& pulse);
 
   static Double_t PmtResponse(Double_t x);
   static Double_t PmtResponse(Double_t* x, Double_t*);
