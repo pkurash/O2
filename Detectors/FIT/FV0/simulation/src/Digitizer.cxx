@@ -24,7 +24,7 @@ void Digitizer::clear()
   mEventId = -1;
   mSrcId = -1;
   for (auto& analogSignal : mPmtChargeVsTime) {
-    std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
+  std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
   }
 }
 
