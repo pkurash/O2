@@ -212,7 +212,7 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   for (auto const& lbl : mMCLabels) {
     labels.addElement(nBC, lbl);
   }
-  mMCLabels.clear();
+ // mMCLabels.clear();
 }
 
 // -------------------------------------------------------------------------------
