@@ -24,7 +24,13 @@ void Digitizer::clear()
   mEventId = -1;
   mSrcId = -1;
   for (auto& analogSignal : mPmtChargeVsTime) {
-  std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
+   // std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
+  }
+  if (mEventId % 10 == 0) {
+    // mCache.erase(mCache.begin(), mCache.end());
+    for (int ir =0; ir < mCache.size(); ir ++){
+      mCache[ir].clear();
+    }  
   }
 }
 
@@ -37,7 +43,7 @@ void Digitizer::init()
   mBinSize = FV0DigParam::Instance().waveformBinWidth; //Will be set-up from CDB
 
   for (Int_t i = 0; i < DP::NCHANNELS; i++) {
-    mPmtChargeVsTime[i].resize(mNBins);
+//    mPmtChargeVsTime[i].resize(mNBins);
   }
 
   auto const roundVc = [&](int i) -> int {
@@ -144,15 +150,65 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       Float_t const t = hit.GetTime() * 1e9 + FV0DigParam::Instance().pmtTransitTime;
       Float_t const charge = TMath::Qe() * FV0DigParam::Instance().pmtGain * mBinSize / mPmtTimeIntegral;
 
-      auto& analogSignal = mPmtChargeVsTime[detId];
+      Float_t timeHit = t;
+      timeHit += mIntRecord.getTimeNS();
+      timeHit -= 320. / o2::constants::physics::LightSpeedCm2NS;
+      LOG(INFO) << "event: " << mEventId <<  " initial time: " << t << " hit number: " << ids << " hit time: " << timeHit << " IR time: " << mIntRecord.getTimeNS();
+      o2::InteractionTimeRecord irHit(timeHit);
+      LOG(INFO) << "irHit: " << irHit.getTimeNS();
+
+      if (mCache.size() <= irHit.bc) {
+        mCache.resize(irHit.bc + 1);
+        LOG(INFO) << "mCache.size() = " << mCache.size();
+      }
+/*
+      for (int ir = 0; ir < mCache.size(); ir ++) {
+         double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * ir;
+         InteractionTimeRecord rNS;
+         rNS.setFromNS(tNS);
+         mCache[ir] = setBCCache(rNS);
+      }
+*/      
+/*
+      std::array<o2::InteractionTimeRecord, NBC2Cache> cachedIR;
+      int nCachedIR = 0;
+      mCache.resize(mCache.size() + NBC2Cache);
+      for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
+        double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
+        cachedIR[nCachedIR].setFromNS(tNS);
+        if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
+          continue; // don't go to negative BC/orbit (it will wrap)
+        }
+        setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
+      }
+*/
+      for (int ir = 0; ir < mCache.size(); ir ++) {
+         auto bcCache = getBCCache(mCache[ir]);
+         LOG(INFO) << "ir = " << ir << " timeNS: " << (*bcCache).bc2ns();
+         for (int ich = 0; ich <  DP::NCHANNELS; ich ++) {
+           (*bcCache).mPmtChargeVsTime[ich].resize(mNBins);
+         }
+      }
+
+      timeHit -= irHit.bc2ns();
+
+      std::vector<bool> added;
+      added.resize(mCache.size());
+      std::fill(added.begin(), added.end(), false);
+
+
+      int  parentId = hit.GetTrackID();      
+
       for (Int_t iPhE = 0; iPhE < nPhE; ++iPhE) {
-        Float_t const tPhE = t + mRndSignalShape.getNextValue();
+        Float_t const tPhE = timeHit + mRndSignalShape.getNextValue();
         Int_t const firstBin = roundVc(
           TMath::Max((Int_t)0, (Int_t)((tPhE - FV0DigParam::Instance().pmtTransitTime) / mBinSize)));
-        Int_t const lastBin = TMath::Min((Int_t)mNBins - 1,
-                                         (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
+        // Int_t const lastBin = TMath::Min((Int_t)mNBins - 1,
+        // (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
+        Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
+                                      (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));         
+
         Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
-        Float_t* p = analogSignal.data() + firstBin;
         long iStart = std::lround((tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime) / mBinSize);
         float const offset = tempT + 2.0f * FV0DigParam::Instance().pmtTransitTime - Float_t(iStart) * mBinSize;
         long const iOffset = std::lround(offset / mBinSize * Float_t(DP::NUM_PMT_RESPONSE_TABLES - 1));
@@ -165,23 +221,39 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         Vc::float_v pmtVc;
         Float_t const* q = mPmtResponseTables[DP::NUM_PMT_RESPONSE_TABLES / 2 + iOffset].data() + iStart;
         Float_t const* qEnd = &mPmtResponseTables[DP::NUM_PMT_RESPONSE_TABLES / 2 + iOffset].back();
-        for (Int_t i = firstBin, iEnd = roundVc(lastBin); q < qEnd && i < iEnd; i += Vc::float_v::Size) {
-          pmtVc.load(q);
-          q += Vc::float_v::Size;
-          Vc::prefetchForOneRead(q);
-          workVc.load(p);
-          workVc += mRndGainVar.getNextValueVc() * charge * pmtVc;
-          workVc.store(p);
-          p += Vc::float_v::Size;
-          Vc::prefetchForOneRead(p);
+
+        for (int ir = firstBin / mNBins; ir <= lastBin / mNBins; ir++) {
+          int localFirst = (ir == firstBin / mNBins) ? firstBin : 0;
+          int localLast = (ir < lastBin / mNBins) ? mNBins : (lastBin - ir * mNBins);
+    
+          auto bcCache = getBCCache(mCache[ir]);
+          (*bcCache).mPmtChargeVsTime[detId].resize(mNBins);
+    
+          auto& analogSignal = (*bcCache).mPmtChargeVsTime[detId];
+          float* p = analogSignal.data() + localFirst;
+    
+          for (Int_t i = localFirst, iEnd = roundVc(localLast); q < qEnd && i < iEnd; i += Vc::float_v::Size) {
+            pmtVc.load(q);
+            q += Vc::float_v::Size;
+            Vc::prefetchForOneRead(q);
+            workVc.load(p);
+            workVc += mRndGainVar.getNextValueVc() * charge * pmtVc;
+            workVc.store(p);
+            p += Vc::float_v::Size;
+            Vc::prefetchForOneRead(p);
+          }
+         added[ir] = true;
         }
       } //photo electron loop
 
       // Charged particles in MCLabel
-      Int_t const parentId = hit.GetTrackID();
-      if (parentId != parentIdPrev) {
-        mMCLabels.emplace_back(parentId, mEventId, mSrcId, detId);
-        parentIdPrev = parentId;
+      for ( int ir = 0; ir < mCache.size(); ir ++) {
+        Int_t const parentId = hit.GetTrackID();
+        if (parentId != parentIdPrev) {
+          auto bcCache = getBCCache(mCache[ir]);
+          (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId);
+          parentIdPrev = parentId;
+        }
       }
     }
   } //hit loop
@@ -192,31 +264,73 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
                                          dataformats::MCTruthContainer<fv0::MCLabel>& labels)
 {
   // Sum charge of all time bins to get total charge collected for a given channel
-  size_t const first = digitsCh.size();
-  size_t nStored = 0;
-  for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
-    Float_t totalCharge = 0.0f;
-    auto const& analogSignal = mPmtChargeVsTime[ipmt];
-    for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++iTimeBin) {
-      Float_t const timeBinCharge = mPmtChargeVsTime[ipmt][iTimeBin];
-      totalCharge += timeBinCharge;
+
+  for (int ic = 0;  ic < mCache.size(); ic ++ ) {
+
+    size_t const first = digitsCh.size();
+    size_t nStored = 0;
+    
+    auto bcCache = getBCCache(mCache[ic]);
+    auto& bc = mCache[ic];
+
+    for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
+      Float_t timeCfd =   SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]);
+      Float_t totalCharge = integrateCharge(bc.mPmtChargeVsTime[ipmt]);
+      LOG(INFO) << "nStored= " << nStored << " timeCfd = " << timeCfd << " totalCharge = " << totalCharge;
+      if (!timeCfd > 0 || !totalCharge > 0){ 
+       continue;
+      }
+      digitsCh.emplace_back(ipmt, timeCfd, totalCharge);
+      nStored ++ ;
     }
-    totalCharge *= DP::INV_CHARGE_PER_ADC;
-    digitsCh.emplace_back(ipmt, SimulateTimeCfd(ipmt), std::lround(totalCharge));
-    ++nStored;
-  }
 
-  // Send MClabels and digitsBC to storage
-  size_t const nBC = digitsBC.size();
-  digitsBC.emplace_back(first, nStored, mIntRecord);
-  for (auto const& lbl : mMCLabels) {
-    labels.addElement(nBC, lbl);
+    // Send MClabels and digitsBC to storage
+    size_t const nBC = digitsBC.size();
+    digitsBC.emplace_back(first, nStored, bc);
+    for (auto const& lbl : bc.labels) {
+      labels.addElement(nBC, lbl);
+    }
   }
-  if ( mEventId % 10 == 0){
-     mMCLabels.clear();
- }
 }
+//_____________________________________________________________________________
+o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionTimeRecord& ir)
+{
+   if (mCache.empty() || mCache.back() < ir) {
+     mCache.emplace_back();
+     auto& cb = mCache.back();
+     cb = ir;
+     return cb;
+   }
+   if (mCache.front() > ir) {
+     mCache.emplace_front();
+     auto& cb = mCache.front();
+     cb = ir;
+     return cb;
+   }
 
+   for (auto cb = mCache.begin(); cb != mCache.end(); cb++) {
+     if ((*cb) == ir) {
+       return *cb;
+     }
+     if (ir < (*cb)) {
+       auto cbnew = mCache.emplace(cb); // insert new element before cb
+       (*cbnew) = ir;
+       return (*cbnew);
+     }
+   }
+   return mCache.front();
+}
+//_____________________________________________________________________________
+o2::fv0::Digitizer::BCCache* Digitizer::getBCCache(const o2::InteractionTimeRecord& ir)
+{
+   // get pointer on existing cache
+   for (auto cb = mCache.begin(); cb != mCache.end(); cb++) {
+     if ((*cb) == ir) {
+       return &(*cb);
+     }
+   }
+   return nullptr;
+}
 // -------------------------------------------------------------------------------
 // --- Internal helper methods related to conversion of energy-deposition into ---
 // --- photons -> photoelectrons -> electrical signal                          ---
@@ -233,7 +347,56 @@ Int_t Digitizer::SimulateLightYield(Int_t pmt, Int_t nPhot) const
                           : gRandom->Gaus(p * nPhot + 0.5, TMath::Sqrt(p * (1 - p) * nPhot)));
   return n;
 }
+//_____________________________________________________________________________
+Float_t Digitizer::SimulateTimeCfd(const ChannelBCDataF& pulse) const //Int_t channel) const
+{
+  Float_t timeCfd = -1024.0f;
 
+  if (pulse.empty() ){
+     return timeCfd;
+  }
+
+  Int_t const binShift = TMath::Nint(FV0DigParam::Instance().timeShiftCfd / mBinSize);
+  Float_t sigPrev = -pulse.at(0);//[0];
+  for (Int_t iTimeBin = 1; iTimeBin < mNBins; ++iTimeBin) {
+    Float_t const sigCurrent = (iTimeBin >= binShift
+                                  ? 5.0f * pulse[iTimeBin - binShift] - pulse[iTimeBin]
+                                  : -pulse[iTimeBin]);
+    if (sigPrev < 0.0f && sigCurrent >= 0.0f) {
+      timeCfd = Float_t(iTimeBin) * mBinSize;
+      break;
+    }
+    sigPrev = sigCurrent;
+  }
+  //TH1F * hCfdTimes = (TH1F*)mHist->FindObject("hCfdTimes");
+  if (timeCfd > 0){
+   //  hCfdTimes->Fill(timeCfd);
+  }
+
+  return timeCfd;
+}
+
+//-----------------------------------------------------------------------------
+Float_t Digitizer::integrateCharge(const ChannelBCDataF& pulse)//, TH1F *h1)
+{
+    if (pulse.empty() ){
+     return 0;
+    }
+    Float_t totalCharge = 0.0f;
+    for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++ iTimeBin) {
+      totalCharge += pulse.at(iTimeBin);
+      if (pulse[iTimeBin] > 0 && totalCharge > 0) {     
+       /* LOG(INFO) << "iTimeBin = "        << iTimeBin
+                  <<  " timeBinCharge = " << pulse[iTimeBin] * DP::INV_CHARGE_PER_ADC    
+                  << " totalCharge = "    << totalCharge * DP::INV_CHARGE_PER_ADC;*/
+      }
+    }
+    totalCharge *= DP::INV_CHARGE_PER_ADC;
+    return (std::lround(totalCharge));
+}
+
+
+/*
 Float_t Digitizer::SimulateTimeCfd(Int_t channel) const
 {
   Float_t timeCfd = -1024.0f;
@@ -251,7 +414,7 @@ Float_t Digitizer::SimulateTimeCfd(Int_t channel) const
   }
   return timeCfd;
 }
-
+*/
 Double_t Digitizer::PmtResponse(Double_t* x, Double_t*)
 {
   return Digitizer::PmtResponse(x[0]);
