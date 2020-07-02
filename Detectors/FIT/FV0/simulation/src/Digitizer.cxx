@@ -26,12 +26,6 @@ void Digitizer::clear()
   for (auto& analogSignal : mPmtChargeVsTime) {
    // std::fill_n(std::begin(analogSignal), analogSignal.size(), 0);
   }
-  if (mEventId % 10 == 0) {
-    // mCache.erase(mCache.begin(), mCache.end());
-    for (int ir =0; ir < mCache.size(); ir ++){
-      mCache[ir].clear();
-    }  
-  }
 }
 
 //_______________________________________________________________________
@@ -289,6 +283,9 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     digitsBC.emplace_back(first, nStored, bc);
     for (auto const& lbl : bc.labels) {
       labels.addElement(nBC, lbl);
+    }
+    if (mEventId % 10 == 0){
+      bc.labels.clear();
     }
   }
 }
