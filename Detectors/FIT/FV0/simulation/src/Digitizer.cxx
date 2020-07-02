@@ -284,8 +284,9 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     for (auto const& lbl : bc.labels) {
       labels.addElement(nBC, lbl);
     }
-    if (mEventId % 10 == 0){
-      bc.labels.clear();
+    
+    while (mCache.size() > 10) {
+      mCache.pop_front();
     }
   }
 }
