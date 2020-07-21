@@ -20,6 +20,8 @@
 #include <SimulationDataFormat/MCTruthContainer.h>
 #include <MathUtils/RandomRing.h>
 #include <CommonDataFormat/InteractionRecord.h>
+#include "CommonConstants/LHCConstants.h"
+#include "CommonConstants/PhysicsConstants.h"
 #include <array>
 #include <vector>
 
@@ -36,7 +38,7 @@ class Digitizer
 
  public:
   Digitizer()
-    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
+    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
   {
   }
 
@@ -64,12 +66,52 @@ class Digitizer
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
 
+
+ using ChannelBCDataF = std::vector<float>;
+
+  struct BCCache : public o2::InteractionTimeRecord {
+    std::vector<o2::fv0::MCLabel> labels;
+    std::array<float, DP::NCHANNELS> CFD_times;
+    std::array<ChannelBCDataF, DP::NCHANNELS> mPmtChargeVsTime = {};
+
+    void clear()
+    {
+      for(auto& channel : mPmtChargeVsTime) {
+        //channel.fill(0.);a
+        std::fill(channel.begin(), channel.end(), 0.);
+      }
+      labels.clear();
+    }
+
+    //BCCache();
+
+    BCCache& operator=(const o2::InteractionTimeRecord& ir)
+    {
+      o2::InteractionTimeRecord::operator=(ir);
+      return *this;
+    }
+     void print() const;
+  };
+
  private:
   long mTimeStamp;              // TF (run) timestamp
-  InteractionRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
+  InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
   std::vector<fv0::MCLabel> mMCLabels;
+
+  std::deque<BCCache> mCache;
+
+  TList *mHist;
+
+  o2::InteractionTimeRecord firstBCinDeque = 0;
+
+  static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  void createPulse(int nPhE, int parentId, double timeHit, int detId, int eventId, int srcId);
+
+  BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
+  BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
+
 
   std::array<std::vector<Float_t>, DP::NCHANNELS> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                    // Number of bins in pulse series
@@ -87,7 +129,8 @@ class Digitizer
 
   // Internal helper methods related to conversion of energy-deposition into photons -> photoelectrons -> el. signal
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
-  Float_t SimulateTimeCfd(Int_t channel) const;
+  Float_t SimulateTimeCfd(const ChannelBCDataF& pulse /*Int_t channel*/) const;
+  Float_t integrateCharge(const ChannelBCDataF& pulse);
 
   static Double_t PmtResponse(Double_t x);
   static Double_t PmtResponse(Double_t* x, Double_t*);
