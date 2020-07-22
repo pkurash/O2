@@ -147,14 +147,32 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       Float_t timeHit = t;
       timeHit += mIntRecord.getTimeNS();
       timeHit -= 320. / o2::constants::physics::LightSpeedCm2NS;
-      LOG(INFO) << "event: " << mEventId <<  " initial time: " << t << " hit number: " << ids << " hit time: " << timeHit << " IR time: " << mIntRecord.getTimeNS();
+      LOG(INFO) << "event: " << mEventId <<  " initial time: " 
+                << t << " hit number: " << ids << " hit time: " 
+		<< timeHit << " IR time: " << mIntRecord.getTimeNS();
       o2::InteractionTimeRecord irHit(timeHit);
       LOG(INFO) << "irHit: " << irHit.getTimeNS();
 
+     
+      std::array<o2::InteractionTimeRecord, NBC2Cache> cachedIR;
+
+      int nCachedIR = 0;
+      for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
+        double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
+        cachedIR[nCachedIR].setFromNS(tNS);
+        if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
+          continue; // don't go to negative BC/orbit (it will wrap)
+        }
+        setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
+      }
+      LOG(INFO) << "mCache.size() = " << mCache.size();
+
+/*
       if (mCache.size() <= irHit.bc) {
         mCache.resize(irHit.bc + 1);
         LOG(INFO) << "mCache.size() = " << mCache.size();
       }
+*/      
 /*
       for (int ir = 0; ir < mCache.size(); ir ++) {
          double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * ir;
@@ -178,7 +196,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
 */
       for (int ir = 0; ir < mCache.size(); ir ++) {
          auto bcCache = getBCCache(mCache[ir]);
-         LOG(INFO) << "ir = " << ir << " timeNS: " << (*bcCache).bc2ns();
+         LOG(INFO) << "ir = " << ir << " timeNS: " << (*bcCache).getTimeNS();
          for (int ich = 0; ich <  DP::NCHANNELS; ich ++) {
            (*bcCache).mPmtChargeVsTime[ich].resize(mNBins);
          }
@@ -190,7 +208,6 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       added.resize(mCache.size());
       std::fill(added.begin(), added.end(), false);
 
-
       int  parentId = hit.GetTrackID();      
 
       for (Int_t iPhE = 0; iPhE < nPhE; ++iPhE) {
@@ -199,7 +216,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
           TMath::Max((Int_t)0, (Int_t)((tPhE - FV0DigParam::Instance().pmtTransitTime) / mBinSize)));
         // Int_t const lastBin = TMath::Min((Int_t)mNBins - 1,
         // (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));
-        Int_t const lastBin  = TMath::Min((Int_t)(mCache.size() * mNBins - 1),
+        Int_t const lastBin  = TMath::Min((Int_t)(NBC2Cache /*mCache.size()*/ * mNBins - 1),
                                       (Int_t)((tPhE + 2. * FV0DigParam::Instance().pmtTransitTime) / mBinSize));         
 
         Float_t const tempT = mBinSize * (0.5f + firstBin) - tPhE;
@@ -284,10 +301,23 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     for (auto const& lbl : bc.labels) {
       labels.addElement(nBC, lbl);
     }
-    
-    while (mCache.size() > 10) {
-      mCache.pop_front();
+
+    float firstBCtimeNS = mCache[0].getTimeNS();
+    float lastBCtimeNS  = mCache[mCache.size() -1 ].getTimeNS();
+    int   nFL          = int((lastBCtimeNS - firstBCtimeNS)/o2::constants::lhc::LHCBunchSpacingNS);
+    while (nFL > NBC2Cache + 1){
+     if (!mCache.empty()){
+        mCache.pop_front();
+     }
+      nFL = nFL -1;
     }
+
+    LOG(INFO) << "first tNS: " << firstBCtimeNS             
+              << " last tNS: " << lastBCtimeNS << 
+    "cache size in ns: " << lastBCtimeNS - firstBCtimeNS <<
+    " or "               << nFL 
+                         << " BC-s" ;
+
   }
 }
 //_____________________________________________________________________________

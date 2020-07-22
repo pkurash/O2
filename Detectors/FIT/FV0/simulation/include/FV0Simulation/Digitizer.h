@@ -67,7 +67,7 @@ class Digitizer
   uint16_t getBC() const { return mIntRecord.bc; }
 
 
- using ChannelBCDataF = std::vector<float>;
+  using ChannelBCDataF = std::vector<float>;
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
