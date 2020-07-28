@@ -153,6 +153,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       o2::InteractionTimeRecord irHit(timeHit);
       LOG(INFO) << "irHit: " << irHit.getTimeNS();
 
+      timeHit -= irHit.bc2ns();
      
       std::array<o2::InteractionTimeRecord, NBC2Cache> cachedIR;
 
@@ -167,33 +168,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       }
       LOG(INFO) << "mCache.size() = " << mCache.size();
 
-/*
-      if (mCache.size() <= irHit.bc) {
-        mCache.resize(irHit.bc + 1);
-        LOG(INFO) << "mCache.size() = " << mCache.size();
-      }
-*/      
-/*
-      for (int ir = 0; ir < mCache.size(); ir ++) {
-         double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * ir;
-         InteractionTimeRecord rNS;
-         rNS.setFromNS(tNS);
-         mCache[ir] = setBCCache(rNS);
-      }
-*/      
-/*
-      std::array<o2::InteractionTimeRecord, NBC2Cache> cachedIR;
-      int nCachedIR = 0;
-      mCache.resize(mCache.size() + NBC2Cache);
-      for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
-        double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
-        cachedIR[nCachedIR].setFromNS(tNS);
-        if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
-          continue; // don't go to negative BC/orbit (it will wrap)
-        }
-        setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
-      }
-*/
+
       for (int ir = 0; ir < mCache.size(); ir ++) {
          auto bcCache = getBCCache(mCache[ir]);
          LOG(INFO) << "ir = " << ir << " timeNS: " << (*bcCache).getTimeNS();
@@ -202,7 +177,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
          }
       }
 
-      timeHit -= irHit.bc2ns();
+//      timeHit -= irHit.bc2ns();
 
       std::vector<bool> added;
       added.resize(mCache.size());
@@ -276,21 +251,26 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
 {
   // Sum charge of all time bins to get total charge collected for a given channel
 
-  for (int ic = 0;  ic < mCache.size(); ic ++ ) {
+for (int ic = 0;  ic < mCache.size(); ic ++ ) {
+  
+    LOG(INFO) << "ic = " << ic;
+    
+    auto bcCache = getBCCache(mCache[0]);
+    auto& bc = mCache[0];
 
     size_t const first = digitsCh.size();
     size_t nStored = 0;
     
-    auto bcCache = getBCCache(mCache[ic]);
-    auto& bc = mCache[ic];
+ // auto bcCache = getBCCache(mCache[ic]);
+ // auto& bc = mCache[ic];
 
     for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
       Float_t timeCfd =   SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]);
       Float_t totalCharge = integrateCharge(bc.mPmtChargeVsTime[ipmt]);
-      LOG(INFO) << "nStored= " << nStored << " timeCfd = " << timeCfd << " totalCharge = " << totalCharge;
       if (!timeCfd > 0 || !totalCharge > 0){ 
        continue;
       }
+      LOG(INFO) << "nStored= " << nStored << " timeCfd = " << timeCfd << " totalCharge = " << totalCharge;
       digitsCh.emplace_back(ipmt, timeCfd, totalCharge);
       nStored ++ ;
     }
@@ -302,23 +282,26 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
       labels.addElement(nBC, lbl);
     }
 
-    float firstBCtimeNS = mCache[0].getTimeNS();
-    float lastBCtimeNS  = mCache[mCache.size() -1 ].getTimeNS();
-    int   nFL          = int((lastBCtimeNS - firstBCtimeNS)/o2::constants::lhc::LHCBunchSpacingNS);
-    while (nFL > NBC2Cache + 1){
-     if (!mCache.empty()){
-        mCache.pop_front();
-     }
-      nFL = nFL -1;
-    }
-
-    LOG(INFO) << "first tNS: " << firstBCtimeNS             
-              << " last tNS: " << lastBCtimeNS << 
-    "cache size in ns: " << lastBCtimeNS - firstBCtimeNS <<
-    " or "               << nFL 
-                         << " BC-s" ;
-
+    mCache.pop_front();  
   }
+
+//    float firstBCtimeNS = mCache[0].getTimeNS();
+//    float lastBCtimeNS  = mCache[mCache.size() -1 ].getTimeNS();
+//    int   nFL          = int((lastBCtimeNS - firstBCtimeNS)/o2::constants::lhc::LHCBunchSpacingNS);
+//    while (nFL > NBC2Cache + 1){
+//     if (!mCache.empty()){
+//        mCache.pop_front();
+//     }
+//      nFL = nFL -1;
+//    }
+//
+//    LOG(INFO) << "first tNS: " << firstBCtimeNS             
+//              << " last tNS: " << lastBCtimeNS << 
+//    "cache size in ns: " << lastBCtimeNS - firstBCtimeNS <<
+//    " or "               << nFL 
+//                         << " BC-s" ;
+//
+
 }
 //_____________________________________________________________________________
 o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionTimeRecord& ir)
