@@ -157,6 +157,15 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
      
       std::array<o2::InteractionTimeRecord, NBC2Cache> cachedIR;
 
+//      while (mCache.front() < mIntRecord){ 
+//         mCache.pop_front();
+//      }
+
+      if (mCache.size() <= irHit.bc) {
+        mCache.resize(irHit.bc + 1);
+        LOG(INFO) << "mCache.size() = " << mCache.size();
+      }
+/*
       int nCachedIR = 0;
       for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
         double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
@@ -167,7 +176,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
       }
       LOG(INFO) << "mCache.size() = " << mCache.size();
-
+*/
 
       for (int ir = 0; ir < mCache.size(); ir ++) {
          auto bcCache = getBCCache(mCache[ir]);
@@ -176,8 +185,6 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
            (*bcCache).mPmtChargeVsTime[ich].resize(mNBins);
          }
       }
-
-//      timeHit -= irHit.bc2ns();
 
       std::vector<bool> added;
       added.resize(mCache.size());
@@ -237,7 +244,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         Int_t const parentId = hit.GetTrackID();
         if (parentId != parentIdPrev) {
           auto bcCache = getBCCache(mCache[ir]);
-          (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId);
+	  (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId);
           parentIdPrev = parentId;
         }
       }
@@ -245,6 +252,69 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
   } //hit loop
 }
 
+//_____________________________________________________________________________
+
+
+void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
+                                         std::vector<fv0::ChannelData>& digitsCh,
+                                         dataformats::MCTruthContainer<fv0::MCLabel>& labels)
+{
+  // Sum charge of all time bins to get total charge collected for a given channel
+
+  size_t const first = digitsCh.size();
+  size_t nStored = 0;
+  //for (int ic = 0;  ic < mCache.size(); ic ++ ) {
+
+  for (auto& bc:mCache) {
+    
+  // auto bcCache = getBCCache(mCache[ic]);
+  // auto& bc = mCache[ic];
+
+//    if (bc < mIntRecord) {
+//        continue;
+//    }
+
+   if (bc < mIntRecord) {
+    continue;
+   }
+
+
+    for (Int_t ipmt = 0; ipmt < DP::NCHANNELS; ++ipmt) {
+      Float_t timeCfd =   SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]);
+      Float_t totalCharge = integrateCharge(bc.mPmtChargeVsTime[ipmt]);
+      LOG(INFO) << "nStored= " << nStored << " timeCfd = " << timeCfd << " totalCharge = " << totalCharge;
+      if (!timeCfd > 0 || !totalCharge > 0){ 
+       continue;
+      }
+      digitsCh.emplace_back(ipmt, timeCfd, totalCharge);
+      nStored ++ ;
+    }
+
+    // Send MClabels and digitsBC to storage
+    size_t const nBC = digitsBC.size();
+    digitsBC.emplace_back(first, nStored, bc);
+    for (auto const& lbl : bc.labels) {
+      labels.addElement(nBC, lbl);
+    }
+    
+
+  }
+  
+//  for (int ii = 0; ii < mCache.size(); ii ++) {
+//     auto& bc = mCache.front();
+//     if (!mCache.empty() && bc < mIntRecord) {
+//       mCache.pop_front();
+//     }
+//     else 
+//      break;
+//  }
+ 
+    while (mCache.size() > 1) {
+      mCache.pop_front();
+    }
+}
+
+/*
 void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
                                          std::vector<fv0::ChannelData>& digitsCh,
                                          dataformats::MCTruthContainer<fv0::MCLabel>& labels)
@@ -255,8 +325,8 @@ for (int ic = 0;  ic < mCache.size(); ic ++ ) {
   
     LOG(INFO) << "ic = " << ic;
     
-    auto bcCache = getBCCache(mCache[0]);
-    auto& bc = mCache[0];
+    auto bcCache = getBCCache(mCache[ic]);
+    auto& bc = mCache[ic];
 
     size_t const first = digitsCh.size();
     size_t nStored = 0;
@@ -282,8 +352,11 @@ for (int ic = 0;  ic < mCache.size(); ic ++ ) {
       labels.addElement(nBC, lbl);
     }
 
-    mCache.pop_front();  
-  }
+   if (!mCache.empty() && mCache.size() >  NBC2Cache){
+       mCache.pop_front();
+     }  
+
+   }
 
 //    float firstBCtimeNS = mCache[0].getTimeNS();
 //    float lastBCtimeNS  = mCache[mCache.size() -1 ].getTimeNS();
@@ -302,7 +375,7 @@ for (int ic = 0;  ic < mCache.size(); ic ++ ) {
 //                         << " BC-s" ;
 //
 
-}
+}*/
 //_____________________________________________________________________________
 o2::fv0::Digitizer::BCCache& Digitizer::setBCCache(const o2::InteractionTimeRecord& ir)
 {
