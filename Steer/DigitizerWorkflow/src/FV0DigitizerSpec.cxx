@@ -71,7 +71,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
     // loop over all composite collisions given from context
     // (aka loop over all the interaction records)
     std::vector<o2::fv0::Hit> hits;
-    for (int collID = 0; collID < irecords.size(); ++collID) {
+    for (int collID = 0; collID < irecords.size(); ++collID) { 
       mDigitizer.clear();
       const auto& irec = irecords[collID];
       mDigitizer.setInteractionRecord(irec);
@@ -81,7 +81,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
         hits.clear();
         context->retrieveHits(mSimChains, "FV0Hit", part.sourceID, part.entryID, &hits);
         LOG(INFO) << "[FV0] For collision " << collID << " eventID " << part.entryID << " sourceID " << part.sourceID
-	<< " found " << hits.size() << " hits ";
+	<< " IR " << irec << " found " << hits.size() << " hits ";
 
         // call actual digitization procedure
         mDigitizer.setEventId(part.entryID);

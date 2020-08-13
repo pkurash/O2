@@ -77,7 +77,6 @@ class Digitizer
     void clear()
     {
       for(auto& channel : mPmtChargeVsTime) {
-        //channel.fill(0.);a
         std::fill(channel.begin(), channel.end(), 0.);
       }
       labels.clear();
