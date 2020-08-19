@@ -107,6 +107,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
     return (i / Vc::float_v::Size) * Vc::float_v::Size;
   };
   Int_t parentIdPrev = -10;
+  Int_t nEmp = 0;
   // use ordered hits
   for (auto ids : hitIdx) {
     const auto& hit = hits[ids];
@@ -183,9 +184,11 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       if (parentId != parentIdPrev) {
         mMCLabels.emplace_back(parentId, mEventId, mSrcId, detId);
         parentIdPrev = parentId;
+        nEmp ++;
       }
     }
   } //hit loop
+  LOG(INFO) << "event: = " << mEventId <<", nEmp = " << nEmp; 
 }
 
 void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
@@ -201,6 +204,8 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     for (Int_t iTimeBin = 0; iTimeBin < mNBins; ++iTimeBin) {
       Float_t const timeBinCharge = mPmtChargeVsTime[ipmt][iTimeBin];
       totalCharge += timeBinCharge;
+      LOG(INFO) << "ipmt = " << ipmt << " totalCharge = "   << totalCharge * DP::INV_CHARGE_PER_ADC;
+      LOG(INFO) << "ipmt = " << ipmt << " timeBinCharge = " << timeBinCharge * DP::INV_CHARGE_PER_ADC; 
     }
     totalCharge *= DP::INV_CHARGE_PER_ADC;
     digitsCh.emplace_back(ipmt, SimulateTimeCfd(ipmt), std::lround(totalCharge));
@@ -210,10 +215,28 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   // Send MClabels and digitsBC to storage
   size_t const nBC = digitsBC.size();
   digitsBC.emplace_back(first, nStored, mIntRecord);
+
+  LOG(INFO) << "mMCLabels.size() = " << mMCLabels.size();
+  int nl = 1;
+
   for (auto const& lbl : mMCLabels) {
     labels.addElement(nBC, lbl);
+    /*
+    LOG(INFO) << "label nr "     << nl << "/" << mMCLabels.size()
+              << ": EventID = "  << lbl.getEventID()
+              << " SourceID = "   << lbl.getSourceID()
+              << " TrackID = "    << lbl.getTrackID();
+     */
+    nl ++;
   }
-  mMCLabels.clear();
+
+ while (TMath::Abs(mMCLabels.front().getEventID() - mMCLabels.back().getEventID())  > 0){ 
+   mMCLabels.pop_front();
+ }
+
+  LOG(INFO) << "mMCLabels.size() after = " << mMCLabels.size();
+
+//  mMCLabels.clear();
 }
 
 // -------------------------------------------------------------------------------

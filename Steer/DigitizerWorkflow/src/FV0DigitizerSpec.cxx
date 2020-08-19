@@ -80,7 +80,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
       for (auto& part : eventParts[collID]) {
         hits.clear();
         context->retrieveHits(mSimChains, "FV0Hit", part.sourceID, part.entryID, &hits);
-        LOG(INFO) << "[FV0] For collision " << collID << " eventID " << part.entryID << " found " << hits.size() << " hits ";
+        LOG(INFO) << "[FV0] For collision " << collID << " eventID " << part.entryID << " sourceID " << part.sourceID <<  " found " << hits.size() << " hits ";
 
         // call actual digitization procedure
         mDigitizer.setEventId(part.entryID);
