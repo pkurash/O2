@@ -21,6 +21,8 @@
 #include <SimulationDataFormat/MCTruthContainer.h>
 #include <MathUtils/RandomRing.h>
 #include <CommonDataFormat/InteractionRecord.h>
+#include "CommonConstants/LHCConstants.h"
+#include "CommonConstants/PhysicsConstants.h"
 #include <array>
 #include <vector>
 
@@ -37,7 +39,7 @@ class Digitizer
 
  public:
   Digitizer()
-    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
+    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mNBins(), mRndScintDelay(HitRandomRingType::RandomType::CustomTF1), mRndGainVar(PheRandomRingType::RandomType::CustomTF1), mRndSignalShape(PheRandomRingType::RandomType::CustomTF1), mPmtResponseTables()
   {
   }
 
@@ -65,17 +67,54 @@ class Digitizer
   uint32_t getOrbit() const { return mIntRecord.orbit; }
   uint16_t getBC() const { return mIntRecord.bc; }
 
- private:
-  long mTimeStamp;              // TF (run) timestamp
-  InteractionRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
-  Int_t mEventId;               // ID of the current event
-  Int_t mSrcId;                 // signal, background or QED
-  std::deque<fv0::MCLabel> mMCLabels;
+  using ChannelBCDataF = std::vector<float>;
 
-  std::array<std::vector<Float_t>, Constants::nFv0Channels> mPmtChargeVsTime; // Charge time series: analog pulse from PM
-  UInt_t mNBins;                                                              // Number of bins in pulse series
+  struct BCCache : public o2::InteractionTimeRecord {
+    std::vector<o2::fv0::MCLabel> labels;
+    std::array<float, Constants::nFv0Channels> CFD_times;
+    std::array<ChannelBCDataF, Constants::nFv0Channels> mPmtChargeVsTime = {};
+
+    void clear()
+    {
+      for(auto& channel : mPmtChargeVsTime) {
+        std::fill(channel.begin(), channel.end(), 0.);
+      }
+      labels.clear();
+    }
+
+    bool IsProcessed = false;
+
+    //BCCache();
+
+    BCCache& operator=(const o2::InteractionTimeRecord& ir)
+    {
+      o2::InteractionTimeRecord::operator=(ir);
+      return *this;
+    }
+     void print() const;
+  };
+
+
+ private:
+  long mTimeStamp;                  // TF (run) timestamp
+  InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
+  Int_t mEventId;                   // ID of the current event
+  Int_t mSrcId;                     // signal, background or QED
+  std::deque<fv0::MCLabel> mMCLabels;
+  
+  std::deque<BCCache> mCache;
+
+  TList mHist;
+
+//  std::array<std::vector<Float_t>, Constants::nFv0Channels> mPmtChargeVsTime; // Charge time series: analog pulse from PM
+  UInt_t  mNBins;                                                              // Number of bins in pulse series
   Float_t mBinSize;                                                           // Time width of pulse bin: HPTDC resolution
   Float_t mPmtTimeIntegral;                                                   //
+  
+  static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+
+  BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
+  BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
 
   // Random rings
   HitRandomRingType mRndScintDelay;
@@ -88,7 +127,9 @@ class Digitizer
 
   // Internal helper methods related to conversion of energy-deposition into photons -> photoelectrons -> el. signal
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
-  Float_t SimulateTimeCfd(Int_t channel) const;
+ // Float_t SimulateTimeCfd(Int_t channel) const;
+  Float_t SimulateTimeCfd(const ChannelBCDataF& pulse /*Int_t channel*/) const;
+  Float_t integrateCharge(const ChannelBCDataF& pulse);
 
   static Double_t PmtResponse(Double_t x);
   static Double_t PmtResponse(Double_t* x, Double_t*);
