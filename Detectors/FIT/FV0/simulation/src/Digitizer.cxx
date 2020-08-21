@@ -297,8 +297,12 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
       if (sum_charges == 0) {
         continue;
       }
-   
-      if (bc.bc2ns() <= mIntRecord.bc2ns() + o2::constants::lhc::LHCBunchSpacingNS) {
+      
+      if (bc.bc2ns() >= mIntRecord.bc2ns() + o2::constants::lhc::LHCBunchSpacingNS * NBC2Cache) {
+        continue;
+      }
+
+      if (bc.bc2ns() < mIntRecord.bc2ns()) {
         mCache.pop_front();
         continue;
       }
