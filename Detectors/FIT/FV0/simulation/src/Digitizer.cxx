@@ -162,7 +162,11 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   for (auto const& lbl : mMCLabels) {
     labels.addElement(nBC, lbl);
   }
-  mMCLabels.clear();
+  
+  while (TMath::Abs(mMCLabels.front().getEventID() - mMCLabels.back().getEventID())) {
+     mMCLabels.pop_front();
+  }
+//   mMCLabels.clear();
 }
 
 // -------------------------------------------------------------------------------

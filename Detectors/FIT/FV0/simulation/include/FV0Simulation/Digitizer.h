@@ -68,7 +68,7 @@ class Digitizer
   InteractionRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
-  std::vector<fv0::MCLabel> mMCLabels;
+  std::deque<fv0::MCLabel> mMCLabels;
 
   std::array<std::vector<Float_t>, Constants::nFv0Channels> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                              // Number of bins in pulse series
