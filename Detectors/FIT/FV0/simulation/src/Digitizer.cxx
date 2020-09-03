@@ -225,7 +225,7 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   }
 
   while (TMath::Abs(mCache.front().EvID - mCache.back().EvID)) { 
-     mMCLabels.pop_front();
+     mCache.pop_front();
   }
 //   mMCLabels.clear();
 }
