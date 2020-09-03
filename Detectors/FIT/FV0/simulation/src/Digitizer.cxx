@@ -190,7 +190,7 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
 
   for (auto bc : mCache) {
     if (bc.IsProcessed) {
-      continue;
+     continue;
     }
     for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
       float time = SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]) - FV0DigParam::Instance().timeCompensate;
@@ -218,18 +218,15 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     digitsBC.emplace_back(first, nStored, mIntRecord);
     for (auto const& lbl : bc.labels) {
       labels.addElement(nBC, lbl);
-      evID = lbl.getEventID();
+      bc.setEvID(lbl.getEventID());
     }
 
     bc.IsProcessed = true;
-    if (evID < mEventId) {
-      mCache.pop_front();
-    }
   }
 
-//  while (TMath::Abs(mMCLabels.front().getEventID() - mMCLabels.back().getEventID())) { 
-//     mMCLabels.pop_front();
-//  }
+  while (TMath::Abs(mCache.front().EvID - mCache.back().EvID)) { 
+     mMCLabels.pop_front();
+  }
 //   mMCLabels.clear();
 }
 

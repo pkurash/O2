@@ -79,6 +79,10 @@ class Digitizer
       labels.clear();
     }
 
+    int EvID;
+   
+    void setEvID (const int ev) {EvID = ev;}
+
     bool IsProcessed = false;
 
     //BCCache();
