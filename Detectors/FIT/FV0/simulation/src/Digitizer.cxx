@@ -110,7 +110,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       float avgMip = float(nPhE / FV0DigParam::Instance().avgPhElectron);
       Float_t const hitTime = hit.GetTime() * 1e9;
       Float_t timeHit = hitTime;
-      LOG(INFO) << "hitTime = " << hitTime << ", mIntRecord time = " << mIntRecord.getTimeNS();
+      // LOG(INFO) << "hitTime = " << hitTime << ", mIntRecord time = " << mIntRecord.getTimeNS();
 
       timeHit += mIntRecord.getTimeNS();
       o2::InteractionTimeRecord irHit(timeHit);
@@ -120,6 +120,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       int nCachedIR = 0;
       for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
         double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
+	LOG(INFO) << "i = " << i << ", tNS = " << tNS << ", mIntRecord time " << mIntRecord.getTimeNS();
         cachedIR[nCachedIR].setFromNS(tNS);
         if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
           continue; // don't go to negative BC/orbit (it will wrap)
@@ -189,8 +190,8 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   int evID;
 
   for (auto bc : mCache) {
-    if (bc.IsProcessed) {
-     continue;
+    if (bc > mIntRecord) {
+      continue;
     }
     for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
       float time = SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]) - FV0DigParam::Instance().timeCompensate;
@@ -224,8 +225,12 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     bc.IsProcessed = true;
   }
 
-  while (TMath::Abs(mCache.front().EvID - mCache.back().EvID) > 0) { 
+  std::sort(mCache.begin(), mCache.end(), [](auto& bc1, auto& bc2)->bool{return bc1.getTimeNS() < bc2.getTimeNS();});
+
+  //while (mCache.front().getTimeNS() < mIntRecord.getTimeNS()) { 
+  while (mCache.front().IsProcessed) {
      mCache.pop_front();
+     LOG(INFO) << "mCache.size() = " << mCache.size();
   }
 //   mMCLabels.clear();
 }

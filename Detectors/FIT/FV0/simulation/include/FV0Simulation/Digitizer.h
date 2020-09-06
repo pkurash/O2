@@ -104,7 +104,7 @@ class Digitizer
 
   std::deque<BCCache> mCache;
 
-  static constexpr int BCCacheMin = 0, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  static constexpr int BCCacheMin = -1, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
 
   BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
   BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
