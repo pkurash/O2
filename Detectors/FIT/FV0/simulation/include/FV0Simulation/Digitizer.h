@@ -83,7 +83,8 @@ class Digitizer
    
     void setEvID (const int ev) {EvID = ev;}
 
-    bool IsProcessed = false;
+    //bool IsCounted = false;
+    bool IsWritten = 0;
 
     //BCCache();
 
@@ -120,8 +121,8 @@ class Digitizer
 
   /// Internal helper methods related to conversion of energy-deposition into el. signal
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
-  Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
-  //Float_t SimulateTimeCfd(Int_t channel) const;
+  //Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
+  Float_t SimulateTimeCfd(Int_t channel, Int_t iCache) const;
 
   /// Functions related to splitting ring-5 cell signal to two readout channels
   static float getDistFromCellCenter(UInt_t cellId, double hitx, double hity);
