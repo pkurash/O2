@@ -35,7 +35,7 @@ class Digitizer
 
  public:
   Digitizer()
-    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), mNBins2(), mPmtResponseGlobal(), mPmtResponseTemp()
+    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), NTimeBinsPerBC(), mPmtResponseGlobal(), mPmtResponseTemp()
   {
   }
 
@@ -111,8 +111,8 @@ class Digitizer
   BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
 
   std::array<std::vector<Float_t>, Constants::nFv0Channels> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
-  UInt_t mNBins;                                                              // Number of bins in pulse series
-  UInt_t mNBins2; 
+  UInt_t mNBins;                                                              //
+  UInt_t NTimeBinsPerBC; 
   Float_t mBinSize;                                                           // Time width of the pulse bin - HPTDC resolution
 
   /// vectors to store the PMT signal from cosmic muons

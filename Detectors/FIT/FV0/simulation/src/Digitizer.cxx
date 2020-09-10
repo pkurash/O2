@@ -37,7 +37,7 @@ void Digitizer::init()
   mNBins = FV0DigParam::Instance().waveformNbins;      //Will be computed using detector set-up from CDB
   mBinSize = FV0DigParam::Instance().waveformBinWidth; //Will be set-up from CDB
 
-  mNBins2 = int(o2::constants::lhc::LHCBunchSpacingNS/mBinSize);
+  NTimeBinsPerBC = int(o2::constants::lhc::LHCBunchSpacingNS/mBinSize);
   
   for (Int_t detID = 0; detID < Constants::nFv0Channels; detID++) {
     mPmtChargeVsTime[detID].resize(mNBins);
@@ -136,7 +136,8 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       for (int ir = 0; ir < NBC2Cache; ir ++) {
         auto bcCache = getBCCache(cachedIR[ir]);
         for (int ich = 0; ich < Constants::nFv0Channels; ich ++) {
-          (*bcCache).mPmtChargeVsTime[ich].resize(mNBins2);
+          (*bcCache).mPmtChargeVsTime[ich].resize(NTimeBinsPerBC);
+	  std::fill((*bcCache).mPmtChargeVsTime[ich].begin(), (*bcCache).mPmtChargeVsTime[ich].end(), 0);
        } 
       }
 
@@ -154,10 +155,10 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
      //Fill cached amplitudes
       //int irCurr = 0;
 
-      for (int ir = 0; ir <= int(mPmtResponseTemp.size()/mNBins2); ir ++) {
+      for (int ir = 0; ir < int(mPmtResponseTemp.size()/NTimeBinsPerBC); ir ++) {
         auto bcCache = getBCCache(cachedIR[ir]);
-        for (int iBin = 0; iBin < mNBins2; iBin++) { 
-          (*bcCache).mPmtChargeVsTime[detId][iBin] += (mPmtResponseTemp[ir * mNBins2 + iBin] *avgMip);
+        for (int iBin = 0; iBin < NTimeBinsPerBC; iBin++) { 
+          (*bcCache).mPmtChargeVsTime[detId][iBin] += (mPmtResponseTemp[ir * NTimeBinsPerBC + iBin] *avgMip);
 	}
 	added[ir] = true;
       }
@@ -202,13 +203,15 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   
       int chargeIntMin = FV0DigParam::Instance().isIntegrateFull ? 0 : FV0DigParam::Instance().chargeIntBinMin;
       int chargeIntMax = FV0DigParam::Instance().isIntegrateFull ? FV0DigParam::Instance().waveformNbins : FV0DigParam::Instance().chargeIntBinMax;
-      //int chargeIntMax = FV0DigParam::Instance().isIntegrateFull ? mNBins2 : FV0DigParam::Instance().chargeIntBinMax;
+      //int chargeIntMax = FV0DigParam::Instance().isIntegrateFull ? NTimeBinsPerBC : FV0DigParam::Instance().chargeIntBinMax;
       
-      for (int ir = int(chargeIntMin/mNBins2); ir < int(chargeIntMax/mNBins2); ir ++) {
+      for (int ir = int(chargeIntMin/NTimeBinsPerBC); ir <= int(chargeIntMax/NTimeBinsPerBC - 1); ir ++) {
         auto& bc2 =  mCache[i + ir];
         for (int iTimeBin = 0; iTimeBin < bc2.mPmtChargeVsTime[ipmt].size(); iTimeBin ++){
-          Float_t const timeBinCharge = bc2.mPmtChargeVsTime[ipmt][iTimeBin - ir * mNBins2];
-          totalCharge += timeBinCharge;
+          Float_t const timeBinCharge = bc2.mPmtChargeVsTime[ipmt][iTimeBin - ir * NTimeBinsPerBC];
+	  if (timeBinCharge > 0) {
+           totalCharge += timeBinCharge;
+	  } 
 	}  
       }
 
@@ -270,16 +273,16 @@ Float_t Digitizer::SimulateTimeCfd(Int_t channel, Int_t iCache /* const ChannelB
   Int_t const binShift = TMath::Nint(FV0DigParam::Instance().timeShiftCfd / mBinSize);
   Float_t sigPrev = -bc.mPmtChargeVsTime[channel][0];//[0];
   for (Int_t iTimeBin = 1; iTimeBin < mNBins; ++iTimeBin) {
-    int irTemp = int(iTimeBin/mNBins2);
+    int irTemp = int(iTimeBin/NTimeBinsPerBC);
     if (irTemp > 0) {
       auto& bc = mCache[iCache + irTemp];
     }
-    Float_t const sigCurrent = (iTimeBin - irTemp * mNBins2 >= binShift
-                                  ? 5.0f * bc.mPmtChargeVsTime[channel][iTimeBin - irTemp * mNBins2 - binShift] 
-				  - bc.mPmtChargeVsTime[channel][iTimeBin - irTemp * mNBins2]
-                                  : -mPmtChargeVsTime[channel][iTimeBin - irTemp * mNBins2]);
+    Float_t const sigCurrent = (iTimeBin - irTemp * NTimeBinsPerBC >= binShift
+                                  ? 5.0f * bc.mPmtChargeVsTime[channel][iTimeBin - irTemp * NTimeBinsPerBC - binShift] 
+				  - bc.mPmtChargeVsTime[channel][iTimeBin - irTemp * NTimeBinsPerBC]
+                                  : -mPmtChargeVsTime[channel][iTimeBin - irTemp * NTimeBinsPerBC]);
     if (sigPrev < 0.0f && sigCurrent >= 0.0f) {
-      timeCfd = Float_t(iTimeBin - irTemp * mNBins2) * mBinSize;
+      timeCfd = Float_t(iTimeBin - irTemp * NTimeBinsPerBC) * mBinSize;
       break;
     }
     sigPrev = sigCurrent;
