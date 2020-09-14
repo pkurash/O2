@@ -175,9 +175,13 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
             (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId); 
             
             timesCfd[ir] = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
+	    
   	    if (timeMax < timesCfd[ir]) {
               timeMax = timesCfd[ir];
   	    }
+	    LOG(INFO) << "ir = " << ir 
+	              << ", timeMax = " << timeMax 
+		      << ", timeCfd = " << timesCfd[ir];
     	  }  
            parentIdPrev = parentId;
         }
@@ -215,8 +219,6 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
           continue;
   
         float charge = IntegrateCharge(bc.mPmtChargeVsTime[ipmt]);
-//       if (charge == 0)
-//	  continue;
 
         totalCharge += charge;
       
@@ -265,12 +267,18 @@ Int_t Digitizer::SimulateLightYield(Int_t pmt, Int_t nPhot) const
 //---------------------------------------------------------------------------
 Float_t Digitizer::IntegrateCharge(const ChannelBCDataF& pulse) const
 {
-  // int chargeIntMin = FV0DigParam::Instance().isIntegrateFull ? 0 : FV0DigParam::Instance().chargeIntBinMin;
-  // int chargeIntMax = FV0DigParam::Instance().isIntegrateFull ? NTimeBinsPerBC : FV0DigParam::Instance().chargeIntBinMax;
+   int chargeIntMin = FV0DigParam::Instance().isIntegrateFull ? 0 : FV0DigParam::Instance().chargeIntBinMin;
+   int chargeIntMax = FV0DigParam::Instance().isIntegrateFull ? NTimeBinsPerBC : FV0DigParam::Instance().chargeIntBinMax;
   Float_t totalCharge = 0.0f;
+  Float_t timeBinCharge;
 
-  for (int iTimeBin = 0; iTimeBin < NTimeBinsPerBC; iTimeBin ++){
-    Float_t const timeBinCharge = pulse[iTimeBin];
+   for (int iTimeBin = 0; NTimeBinsPerBC; iTimeBin ++){
+  //for (int iTimeBin = chargeIntMin; iTimeBin < chargeIntMax; iTimeBin ++){
+    if (iTimeBin < NTimeBinsPerBC) {
+      timeBinCharge = pulse[iTimeBin];
+    }
+    else
+      timeBinCharge = 0.;
      totalCharge += timeBinCharge; 
   }  
 
