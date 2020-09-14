@@ -68,7 +68,8 @@ class Digitizer
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
-    std::array<float, Constants::nFv0Channels> CFD_times;
+    std::array<float, Constants::nFv0Channels> Cfd_times;
+    std::array<float, Constants::nFv0Channels> Charges;
     std::array<ChannelBCDataF, Constants::nFv0Channels> mPmtChargeVsTime = {};
 
     void clear()
@@ -121,8 +122,9 @@ class Digitizer
 
   /// Internal helper methods related to conversion of energy-deposition into el. signal
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
-  //Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
-  Float_t SimulateTimeCfd(Int_t channel, Int_t iCache) const;
+  Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
+  Float_t IntegrateCharge(const ChannelBCDataF& pulse) const;
+ // Float_t SimulateTimeCfd(Int_t channel, Int_t iCache) const;
 
   /// Functions related to splitting ring-5 cell signal to two readout channels
   static float getDistFromCellCenter(UInt_t cellId, double hitx, double hity);
