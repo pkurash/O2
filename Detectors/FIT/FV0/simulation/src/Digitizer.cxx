@@ -168,9 +168,22 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       Int_t parentId = hit.GetTrackID();
       float timeMax = 0;
 
-      for ( int ir = 0; ir < nCachedIR; ir ++) {
-        if (added[ir]) {
+      if (parentId != parentIdPrev) {
+        for ( int ir = 0; ir < nCachedIR; ir ++) {
+          if (added[ir]) {
+            auto bcCache = getBCCache(cachedIR[ir]);
+              (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId); 
+              
+              timesCfd[ir] = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
+    	    if (timeMax < timesCfd[ir]) {
+                timeMax = timesCfd[ir];
+    	    }
+      	  }  
+        }
+        for (int ir = 0; ir < nCachedIR; ir ++) {
+          if (added[ir]);
           auto bcCache = getBCCache(cachedIR[ir]);
+<<<<<<< HEAD
           if (parentId != parentIdPrev) {
             (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId); 
             
@@ -184,13 +197,11 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
 		      << ", timeCfd = " << timesCfd[ir];
     	  }  
            parentIdPrev = parentId;
+=======
+          (*bcCache).Cfd_times[detId] = timeMax; 
+>>>>>>> HEAD@{1}
         }
-      }
-
-      for (int ir = 0; ir < nCachedIR; ir ++) {
-        if (added[ir]);
-        auto bcCache = getBCCache(cachedIR[ir]);
-        (*bcCache).Cfd_times[detId] = timeMax; 
+        parentIdPrev = parentId;
       }
     }
   } //hit loop
