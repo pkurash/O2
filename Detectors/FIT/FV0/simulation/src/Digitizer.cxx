@@ -166,38 +166,9 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       }
 
       Int_t parentId = hit.GetTrackID();
-      float timeMax = 0;
 
-<<<<<<< HEAD
-      //if (parentId != parentIdPrev) {
-        for ( int ir = 0; ir < nCachedIR; ir ++) {
-          if (added[ir]) {
-            auto bcCache = getBCCache(cachedIR[ir]);
-            (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId); 
-            
-           // timesCfd[ir] = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
-            //(*bcCache).Cfd_times[detId]  = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
-	   /* 
-  	    if (timeMax < timesCfd[ir]) {
-              timeMax = timesCfd[ir];
-  	    }
-	    LOG(INFO) << "ir = " << ir 
-	              << ", timeMax = " << timeMax 
-		      << ", timeCfd = " << timesCfd[ir];
-    	   */  
-          }
-        }
-	/*
-        for (int ir = 0; ir < nCachedIR; ir ++) {
-          if (added[ir]);
-          auto bcCache = getBCCache(cachedIR[ir]);
-          (*bcCache).Cfd_times[detId] = timeMax; 
-        }*/
-       // parentIdPrev = parentId;
-     // }
-
-=======
       if (parentId != parentIdPrev) {
+        float timeMax = 0;
         for ( int ir = 0; ir < nCachedIR; ir ++) {
           if (added[ir]) {
             auto bcCache = getBCCache(cachedIR[ir]);
@@ -216,7 +187,6 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         }
         parentIdPrev = parentId;
       }
->>>>>>> 0d3f75db2848ae8f5da90b29bc6d3ee757232ec7
     }
   } //hit loop
 }
@@ -239,7 +209,7 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
       float time = 0.0f;
       float totalCharge = 0.0f;
       for (auto& bc:mCache) {
-        time = SimulateTimeCfd(bc.mPmtChargeVsTime[ipmt]) - FV0DigParam::Instance().timeCompensate;
+        time = bc.Cfd_times[ipmt] - FV0DigParam::Instance().timeCompensate;
         if (time < -FV0DigParam::Instance().cfdCheckWindow || time > FV0DigParam::Instance().cfdCheckWindow)
           continue;
   
