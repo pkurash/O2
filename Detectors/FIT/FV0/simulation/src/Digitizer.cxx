@@ -166,9 +166,9 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       }
 
       Int_t parentId = hit.GetTrackID();
+      float timeMax = 0;
 
       if (parentId != parentIdPrev) {
-        float timeMax = 0;
         for ( int ir = 0; ir < nCachedIR; ir ++) {
           if (added[ir]) {
             auto bcCache = getBCCache(cachedIR[ir]);
