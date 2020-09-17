@@ -99,7 +99,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
 
         // Split signal magnitude to fractions depending on the distance of the hit from the cell center
         hitEdep = (hit.GetHitValue() * 1e3) * getSignalFraction(distanceFromXc, iChannelPerCell == 0);
-        //LOG(INFO) << "  detId: " << detId << "-" << iChannelPerCell << " hitEdep: " << hitEdep << " distanceFromXc: " << distanceFromXc;
+        LOG(INFO) << "  detId: " << detId << "-" << iChannelPerCell << " hitEdep: " << hitEdep << " distanceFromXc: " << distanceFromXc;
         ++iChannelPerCell;
       } else {
         iChannelPerCell = 2; // not a ring 5 cell -> don't repeat the loop
@@ -157,10 +157,10 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
      //Fill cached amplitudes
       //int irCurr = 0;
 
-      for (int ir = 0; ir < int(mPmtResponseTemp.size()/NTimeBinsPerBC); ir ++) {
+      for (int ir = 0; ir < int(mPmtResponseTemp.size()/NTimeBinsPerBC) + 1; ir ++) {
         auto bcCache = getBCCache(cachedIR[ir]);
         for (int iBin = 0; iBin < NTimeBinsPerBC; iBin++) { 
-          (*bcCache).mPmtChargeVsTime[detId][iBin] += (mPmtResponseTemp[ir * NTimeBinsPerBC + iBin] *avgMip);
+          (*bcCache).mPmtChargeVsTime[detId][iBin] += mPmtResponseTemp[ir * NTimeBinsPerBC + iBin] *avgMip;
 	}
 	added[ir] = true;
       }
@@ -201,47 +201,43 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   size_t nStored = 0;
   int evID, ncount = 0;
 
-//  for (auto& bc : mCache) {
- //   if (bc.IsWritten) {
-  //    continue;
-   // }
-    for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
-      float time = 0.0f;
-      float totalCharge = 0.0f;
-      for (auto& bc:mCache) {
-        time = bc.Cfd_times[ipmt] - FV0DigParam::Instance().timeCompensate;
-        if (time < -FV0DigParam::Instance().cfdCheckWindow || time > FV0DigParam::Instance().cfdCheckWindow)
-          continue;
-  
-        float charge = IntegrateCharge(bc.mPmtChargeVsTime[ipmt]);
-//       if (charge == 0)
-//	  continue;
 
-        totalCharge += charge;
-      
-         ++nStored;
-       // Send MClabels and digitsBC to storage
-       size_t const nBC = digitsBC.size();
-       digitsBC.emplace_back(first, nStored, bc);
-       for (auto const& lbl : bc.labels) {
-         labels.addElement(nBC, lbl);
-         bc.setEvID(lbl.getEventID());
-       }
+    for (auto& bc:mCache) {
+  for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
+    float time = 0.0f;
+    float totalCharge = 0.0f;
+      //if (bc.IsWritten) { 
+      //  continue;
+      //}
+      time = bc.Cfd_times[ipmt] - FV0DigParam::Instance().timeCompensate;
+      if (time < -FV0DigParam::Instance().cfdCheckWindow || time > FV0DigParam::Instance().cfdCheckWindow)
+        continue;
+
+      float charge = IntegrateCharge(bc.mPmtChargeVsTime[ipmt]);
+       if (charge == 0)
+	  continue;
+
+      totalCharge += charge;
+    
+       ++nStored;
+     // Send MClabels and digitsBC to storage
+     size_t const nBC = digitsBC.size();
+     digitsBC.emplace_back(first, nStored, bc);
+     for (auto const& lbl : bc.labels) {
+       labels.addElement(nBC, lbl);
+       bc.setEvID(lbl.getEventID());
      }
-     totalCharge *= DP::INV_CHARGE_PER_ADC;
-     time *= DP::INV_TIME_PER_TDCCHANNEL;
-     digitsCh.emplace_back(ipmt, static_cast<short int>(std::round(time)), static_cast<short int>(std::round(totalCharge)));
-    } 
-    //bc.IsWritten = true; //true
-    ncount ++;
+     bc.IsWritten = true; //true
+     ncount ++;
+    totalCharge *= DP::INV_CHARGE_PER_ADC;
+    time *= DP::INV_TIME_PER_TDCCHANNEL;
+    digitsCh.emplace_back(ipmt, static_cast<short int>(std::round(time)), static_cast<short int>(std::round(totalCharge)));
+    }
+  } 
   //}
 
   LOG(INFO) << "Cache size before: " << mCache.size() << ", counted BC-s: " << ncount;
   mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (bc.EvID < mEventId);}), mCache.end());
-
-//  while (mCache.front().IsCounted == 1) { 
-//      mCache.pop_front();
-//  }
   LOG(INFO) << "Cache size after: " << mCache.size();
 }
 
