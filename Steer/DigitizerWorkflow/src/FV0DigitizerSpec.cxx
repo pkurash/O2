@@ -88,7 +88,7 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
         mDigitizer.process(hits);
       }
       mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
-      LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements";
+      LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements" << " collID = " << collID;
     }
 
     // here we have all digits and we can send them to consumer (aka snapshot it onto output)

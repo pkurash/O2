@@ -139,7 +139,7 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
         auto bcCache = getBCCache(cachedIR[ir]);
         for (int ich = 0; ich < Constants::nFv0Channels; ich ++) {
           (*bcCache).mPmtChargeVsTime[ich].resize(NTimeBinsPerBC);
-	  std::fill((*bcCache).mPmtChargeVsTime[ich].begin(), (*bcCache).mPmtChargeVsTime[ich].end(), 0);
+	 // std::fill((*bcCache).mPmtChargeVsTime[ich].begin(), (*bcCache).mPmtChargeVsTime[ich].end(), 0);
        } 
       }
 
@@ -160,35 +160,53 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       for (int ir = 0; ir < int(mPmtResponseTemp.size()/NTimeBinsPerBC) + 1; ir ++) {
         auto bcCache = getBCCache(cachedIR[ir]);
         for (int iBin = 0; iBin < NTimeBinsPerBC; iBin++) { 
-          (*bcCache).mPmtChargeVsTime[detId][iBin] += mPmtResponseTemp[ir * NTimeBinsPerBC + iBin] *avgMip;
+          (*bcCache).mPmtChargeVsTime[detId][iBin] += mPmtResponseTemp[ir * NTimeBinsPerBC + iBin];
 	}
 	added[ir] = true;
       }
 
       Int_t parentId = hit.GetTrackID();
-      float timeMax = 0;
 
       if (parentId != parentIdPrev) {
+        float timeMax = -1024.0f;
         for ( int ir = 0; ir < nCachedIR; ir ++) {
           if (added[ir]) {
             auto bcCache = getBCCache(cachedIR[ir]);
               (*bcCache).labels.emplace_back(parentId, mEventId, mSrcId, detId); 
-              
-              timesCfd[ir] = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
+  /*            timesCfd[ir] = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]); 
     	    if (timeMax < timesCfd[ir]) {
                 timeMax = timesCfd[ir];
     	    }
+	   */
       	  }  
         }
+	/*
         for (int ir = 0; ir < nCachedIR; ir ++) {
           if (added[ir]);
           auto bcCache = getBCCache(cachedIR[ir]);
           (*bcCache).Cfd_times[detId] = timeMax; 
-        }
+        }*/
         parentIdPrev = parentId;
       }
     }
   } //hit loop
+
+  for (Int_t detId = 0; detId < Constants::nFv0Channels; ++detId) {
+    auto bc = mCache.begin();
+    for (int ir = 0; ir < mCache.size(); ir++) {
+      //if (added[ir]);
+      //LOG(INFO)<<"mCache.size() "<<mCache.size()<< *bc;
+
+      auto bcCache = getBCCache(*bc);
+      bc++; //goto the next BC in deque
+      auto timeCfd = SimulateTimeCfd((*bcCache).mPmtChargeVsTime[detId]);
+      //if (TMath::Abs(timeCfd) != 1024 ) LOG(INFO)<<"CFD time "<<timeCfd<<" detID  "<<detId;
+     //LOG(INFO)<<"CFD time "<<timeCfd<<" detID  "<<detId;
+      //LOG(INFO) <<" Time CFD "<<timeCfd;
+      (*bcCache).Cfd_times[detId] = timeCfd;
+    }
+  }
+
 }
 
 //-----------------------------------------------------------------------------
@@ -201,8 +219,7 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   size_t nStored = 0;
   int evID, ncount = 0;
 
-
-    for (auto& bc:mCache) {
+ for (auto& bc:mCache) {
   for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
     float time = 0.0f;
     float totalCharge = 0.0f;
@@ -232,13 +249,13 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     totalCharge *= DP::INV_CHARGE_PER_ADC;
     time *= DP::INV_TIME_PER_TDCCHANNEL;
     digitsCh.emplace_back(ipmt, static_cast<short int>(std::round(time)), static_cast<short int>(std::round(totalCharge)));
-    }
-  } 
-  //}
+       bc.IsWritten = true; //true
+ }
+} 
 
-  LOG(INFO) << "Cache size before: " << mCache.size() << ", counted BC-s: " << ncount;
+  //mCache.erase(mCache.begin(), mCache.end());
   mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (bc.EvID < mEventId);}), mCache.end());
-  LOG(INFO) << "Cache size after: " << mCache.size();
+ // mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (bc.IsWritten);}), mCache.end());
 }
 
 // -------------------------------------------------------------------------------
