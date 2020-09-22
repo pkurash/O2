@@ -14,6 +14,7 @@
 
 #include <TRandom.h>
 #include <algorithm>
+#include "TH1F.h"
 
 ClassImp(o2::fv0::Digitizer);
 
@@ -61,6 +62,12 @@ void Digitizer::init()
   }
 
   LOG(INFO) << "V0Digitizer::init -> finished";
+  
+  mHist = new TList();
+ 
+  TH1F *histTimes = new TH1F ("histTimes", "flight times", 1000, 1.e-9, 1.e-6);
+
+  mHist->Add(histTimes);
 }
 
 void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
@@ -160,15 +167,18 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       for (int ir = 0; ir < int(mPmtResponseTemp.size()/NTimeBinsPerBC) + 1; ir ++) {
         auto bcCache = getBCCache(cachedIR[ir]);
         for (int iBin = 0; iBin < NTimeBinsPerBC; iBin++) { 
-          (*bcCache).mPmtChargeVsTime[detId][iBin] += mPmtResponseTemp[ir * NTimeBinsPerBC + iBin];
+          (*bcCache).mPmtChargeVsTime[detId][iBin] += mPmtResponseTemp[ir * NTimeBinsPerBC + iBin] * avgMip;
 	}
 	added[ir] = true;
       }
 
       Int_t parentId = hit.GetTrackID();
+      //LOG(INFO) << "parentId = " << parentId << " time = " << hit.GetTime() << " eventId = " << mEventId << " SrcId = " << mSrcId << " detId = " << detId;
+
+      TH1F *h = (TH1F*)mHist->FindObject("histTimes");
+      h->Fill(hit.GetTime());
 
       if (parentId != parentIdPrev) {
-        float timeMax = -1024.0f;
         for ( int ir = 0; ir < nCachedIR; ir ++) {
           if (added[ir]) {
             auto bcCache = getBCCache(cachedIR[ir]);
@@ -201,8 +211,20 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
   size_t const first = digitsCh.size();
   size_t nStored = 0;
   int evID, ncount = 0;
+  if (mCache.size() < 1) {
+    return;
+  }  
+
+// std::sort(mCache.begin(), mCache.end(), [](auto& bc1, auto& bc2){ return bc1.getTimeNS() < bc2.getTimeNS(); });
+
+  std::sort(mCache.begin(), mCache.end(), [&](auto& bc1, auto& bc2){ int s1 = mIntRecord.differenceInBC(bc1);
+                                                                    int s2 = mIntRecord.differenceInBC(bc2);
+								    return s1 < s2;});
 
  for (auto& bc:mCache) {
+  if (mIntRecord.differenceInBC(bc) < 0) {
+    continue;
+  }
   for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
     float time = 0.0f;
     float totalCharge = 0.0f;
@@ -214,8 +236,6 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
         continue;
 
       float charge = IntegrateCharge(bc.mPmtChargeVsTime[ipmt]);
-       if (charge == 0)
-	  continue;
 
       totalCharge += charge;
     
@@ -233,12 +253,15 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
     time *= DP::INV_TIME_PER_TDCCHANNEL;
     digitsCh.emplace_back(ipmt, static_cast<short int>(std::round(time)), static_cast<short int>(std::round(totalCharge)));
        bc.IsWritten = true; //true
+  }
  }
-} 
 
-  //mCache.erase(mCache.begin(), mCache.end());
-  mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (bc.EvID < mEventId);}), mCache.end());
- // mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (bc.IsWritten);}), mCache.end());
+  LOG(INFO) << "mCache.size() before " << mCache.size();
+  while (mIntRecord.differenceInBC(mCache.front()) > 1) 
+    mCache.pop_front();
+//  std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (mIntRecord.differenceInBC(bc) > 1);});
+  LOG(INFO) << "mCache.size() after " << mCache.size();
+  
 }
 
 // -------------------------------------------------------------------------------
@@ -380,5 +403,14 @@ o2::fv0::Digitizer::BCCache* Digitizer::getBCCache(const o2::InteractionTimeReco
      }
    }
    return nullptr;
+}
+//_____________________________________________________________________________
+void o2::fv0::Digitizer::writeHists()
+{  
+   LOG(INFO) << "========== SAVING HISTOGRAMS ============";
+
+   TFile *f = TFile::Open("histos.root", "recreate");
+   mHist->Write();
+   f->Close();
 }
 

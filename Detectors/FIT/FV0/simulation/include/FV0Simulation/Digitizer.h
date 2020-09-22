@@ -21,6 +21,7 @@
 #include <SimulationDataFormat/MCTruthContainer.h>
 #include <MathUtils/RandomRing.h>
 #include <CommonDataFormat/InteractionRecord.h>
+#include "TList.h"
 #include <array>
 #include <vector>
 
@@ -97,6 +98,10 @@ class Digitizer
      void print() const;
   };
 
+  TList *mHist; //histograms
+
+  void writeHists();
+  
  private:
   long mTimeStamp;              // TF (run) timestamp
   InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
@@ -105,8 +110,8 @@ class Digitizer
   std::deque<fv0::MCLabel> mMCLabels;
 
   std::deque<BCCache> mCache;
-
-  static constexpr int BCCacheMin = -1, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  
+  static constexpr int BCCacheMin = -1, BCCacheMax = 8, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
 
   BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
   BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
