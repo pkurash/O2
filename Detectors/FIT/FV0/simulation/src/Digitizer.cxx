@@ -85,6 +85,10 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
     Int_t detId = hit.GetDetectorID();
     Double_t hitEdep = hit.GetHitValue() * 1e3; //convert to MeV
 
+    if (fMaxBC < mIntRecord) {
+     fMaxBC = mIntRecord;
+    } 
+
     // TODO: check how big is inaccuracy if more than 1 'below-threshold' particles hit the same detector cell
     if (hitEdep < FV0DigParam::Instance().singleMipThreshold) {
       continue;
@@ -127,12 +131,17 @@ void Digitizer::process(const std::vector<o2::fv0::Hit>& hits)
       int nCachedIR = 0;
       for (int i = BCCacheMin; i < BCCacheMax + 1; i++) {
         double tNS = timeHit + o2::constants::lhc::LHCBunchSpacingNS * i;
-	//LOG(INFO) << "i = " << i << ", tNS = " << tNS << ", mIntRecord time " << mIntRecord.getTimeNS();
         cachedIR[nCachedIR].setFromNS(tNS);
+	/*LOG(INFO) << "i = " << i << ", tNS = " << tNS << ", mIntRecord time " << mIntRecord.getTimeNS()
+	          << ", difference in BC = " << mIntRecord.differenceInBC(cachedIR[nCachedIR]);*/
         if (tNS < 0 && cachedIR[nCachedIR] > irHit) {
           continue; // don't go to negative BC/orbit (it will wrap)
         }
         setBCCache(cachedIR[nCachedIR++]); // ensure existence of cached container
+      }
+
+      if (fMaxBC < cachedIR[nCachedIR]) {
+        //fMaxBC = cachedIR[nCachedIR];
       }
 
       bool added[nCachedIR];
@@ -217,14 +226,17 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
 
 // std::sort(mCache.begin(), mCache.end(), [](auto& bc1, auto& bc2){ return bc1.getTimeNS() < bc2.getTimeNS(); });
 
-  std::sort(mCache.begin(), mCache.end(), [&](auto& bc1, auto& bc2){ int s1 = mIntRecord.differenceInBC(bc1);
+  /*std::sort(mCache.begin(), mCache.end(), [&](auto& bc1, auto& bc2){ int s1 = mIntRecord.differenceInBC(bc1);
                                                                     int s2 = mIntRecord.differenceInBC(bc2);
-								    return s1 < s2;});
+								    return s1 < s2;});*/
 
  for (auto& bc:mCache) {
-  if (mIntRecord.differenceInBC(bc) < 0) {
-    continue;
+  if (bc.getTimeNS() > fMaxBC.getTimeNS() - 175) {
+    LOG(INFO) << "rejected";
+    //continue;
   }
+  else
+    LOG(INFO) << "accepted";
   for (Int_t ipmt = 0; ipmt < Constants::nFv0Channels; ++ipmt) {
     float time = 0.0f;
     float totalCharge = 0.0f;
@@ -257,11 +269,12 @@ void Digitizer::analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
  }
 
   LOG(INFO) << "mCache.size() before " << mCache.size();
-  while (mIntRecord.differenceInBC(mCache.front()) > 1) 
-    mCache.pop_front();
-//  std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return (mIntRecord.differenceInBC(bc) > 1);});
+  //mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return bc.IsWritten;}), mCache.end());
+  mCache.erase(std::remove_if(mCache.begin(), mCache.end(), [&](auto& bc){return bc.getTimeNS() < fMaxBC.getTimeNS() - 175;}), mCache.end());
   LOG(INFO) << "mCache.size() after " << mCache.size();
+
   
+
 }
 
 // -------------------------------------------------------------------------------

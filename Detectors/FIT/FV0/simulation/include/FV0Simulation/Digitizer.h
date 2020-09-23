@@ -108,6 +108,7 @@ class Digitizer
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
   std::deque<fv0::MCLabel> mMCLabels;
+  InteractionTimeRecord fMaxBC;
 
   std::deque<BCCache> mCache;
   
