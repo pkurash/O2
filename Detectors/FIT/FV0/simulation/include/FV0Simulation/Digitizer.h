@@ -21,7 +21,6 @@
 #include <SimulationDataFormat/MCTruthContainer.h>
 #include <MathUtils/RandomRing.h>
 #include <CommonDataFormat/InteractionRecord.h>
-#include "TList.h"
 #include <array>
 #include <vector>
 
@@ -36,7 +35,7 @@ class Digitizer
 
  public:
   Digitizer()
-    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(), mPmtChargeVsTime(), mNBins(), NTimeBinsPerBC(), mPmtResponseGlobal(), mPmtResponseTemp()
+    : mTimeStamp(0), mIntRecord(), mEventId(-1), mSrcId(-1), mMCLabels(),mCache(), mPmtChargeVsTime(), mNBins(), NTimeBinsPerBC(), mPmtResponseGlobal(), mPmtResponseTemp()
   {
   }
 
@@ -54,10 +53,13 @@ class Digitizer
   void setSrcId(Int_t id) { mSrcId = id; }
   void setInteractionRecord(const InteractionTimeRecord& ir) { mIntRecord = ir; }
 
-  void process(const std::vector<o2::fv0::Hit>& hits);
-  void analyseWaveformsAndStore(std::vector<fv0::BCData>& digitsBC,
-                                std::vector<fv0::ChannelData>& digitsCh,
-                                dataformats::MCTruthContainer<fv0::MCLabel>& labels);
+  void process(const std::vector<o2::fv0::Hit>& hits, std::vector<o2::fv0::BCData>& digitsBC,
+    std::vector<o2::fv0::ChannelData>& digitsCh, o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
+
+  void flush(std::vector<o2::fv0::BCData>& digitsBC,
+             std::vector<o2::fv0::ChannelData>& digitsCh,
+             o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
+
 
   const InteractionRecord& getInteractionRecord() const { return mIntRecord; }
   InteractionRecord& getInteractionRecord(InteractionRecord& src) { return mIntRecord; }
@@ -69,8 +71,8 @@ class Digitizer
 
   struct BCCache : public o2::InteractionTimeRecord {
     std::vector<o2::fv0::MCLabel> labels;
-    std::array<float, Constants::nFv0Channels> Cfd_times;
-    std::array<float, Constants::nFv0Channels> Charges;
+    //std::array<float, Constants::nFv0Channels> Cfd_times;
+    //std::array<float, Constants::nFv0Channels> Charges;
     std::array<ChannelBCDataF, Constants::nFv0Channels> mPmtChargeVsTime = {};
 
     void clear()
@@ -81,45 +83,42 @@ class Digitizer
       labels.clear();
     }
 
-    int EvID;
-   
-    void setEvID (const int ev) {EvID = ev;}
-
     //bool IsCounted = false;
-    bool IsWritten = 0;
-
+    //bool isWritten = 0;
+    //int EvID;
+   // void setEvID (const int ev) {EvID = ev;}
     //BCCache();
-
     BCCache& operator=(const o2::InteractionTimeRecord& ir)
     {
       o2::InteractionTimeRecord::operator=(ir);
       return *this;
     }
-     void print() const;
+    void print() const;
   };
 
-  TList *mHist; //histograms
-
-  void writeHists();
-  
  private:
+  static constexpr int BCCacheMin = -1, BCCacheMax = 11, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+  void createPulse(float nphe, int parID, double hitTime, std::array<o2::InteractionTimeRecord, NBC2Cache> const& cachedIR,
+                   int nCachedIR,  const int&  detID);
+
   long mTimeStamp;              // TF (run) timestamp
   InteractionTimeRecord mIntRecord; // Interaction record (orbit, bc) -> InteractionTimeRecord
   Int_t mEventId;               // ID of the current event
   Int_t mSrcId;                 // signal, background or QED
   std::deque<fv0::MCLabel> mMCLabels;
-  InteractionTimeRecord fMaxBC;
-
   std::deque<BCCache> mCache;
-  
-  static constexpr int BCCacheMin = -1, BCCacheMax = 8, NBC2Cache = 1 + BCCacheMax - BCCacheMin;
+
+
 
   BCCache& setBCCache(const o2::InteractionTimeRecord& ir);
   BCCache* getBCCache(const o2::InteractionTimeRecord& ir);
 
+  void storeBC(const BCCache& bc, std::vector<o2::fv0::BCData>& digitsBC, std::vector<o2::fv0::ChannelData>& digitsCh,
+               o2::dataformats::MCTruthContainer<o2::fv0::MCLabel>& labels);
+
   std::array<std::vector<Float_t>, Constants::nFv0Channels> mPmtChargeVsTime; // Charge time series aka analogue signal pulse from PM
   UInt_t mNBins;                                                              //
-  UInt_t NTimeBinsPerBC; 
+  UInt_t NTimeBinsPerBC;
   Float_t mBinSize;                                                           // Time width of the pulse bin - HPTDC resolution
 
   /// vectors to store the PMT signal from cosmic muons
@@ -130,7 +129,7 @@ class Digitizer
   Int_t SimulateLightYield(Int_t pmt, Int_t nPhot) const;
   Float_t SimulateTimeCfd(const ChannelBCDataF& pulse) const;
   Float_t IntegrateCharge(const ChannelBCDataF& pulse) const;
- // Float_t SimulateTimeCfd(Int_t channel, Int_t iCache) const;
+  // Float_t SimulateTimeCfd(Int_t channel, Int_t iCache) const;
 
   /// Functions related to splitting ring-5 cell signal to two readout channels
   static float getDistFromCellCenter(UInt_t cellId, double hitx, double hity);
