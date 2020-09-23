@@ -88,11 +88,19 @@ class FV0DPLDigitizerTask : public o2::base::BaseDPLDigitizer
         mDigitizer.process(hits);
       }
       mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
-      LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements";
+      LOG(INFO) << "[FV0] Has " << mDigitsBC.size() << " BC elements,   " << mDigitsCh.size() << " mDigitsCh elements" << " collID = " << collID;
     }
 
     // here we have all digits and we can send them to consumer (aka snapshot it onto output)
     LOG(INFO) << "FV0: Sending " << mDigitsBC.size() << " digitsBC and " << mDigitsCh.size() << " digitsCh.";
+
+    o2::InteractionTimeRecord terminateIR;
+    terminateIR.orbit = 0xffffffff; // supply IR in the infinite future to flush all cached BC
+    mDigitizer.setInteractionRecord(terminateIR);
+    mDigitizer.analyseWaveformsAndStore(mDigitsBC, mDigitsCh, mLabels);
+        
+
+    mDigitizer.writeHists();
 
     // send out to next stage
     pc.outputs().snapshot(Output{"FV0", "DIGITSBC", 0, Lifetime::Timeframe}, mDigitsBC);
